@@ -218,6 +218,10 @@ export default function ResortBrainPlatform() {
 
   useEffect(() => {
     refreshData();
+    const pollInterval = setInterval(() => {
+      refreshData();
+    }, 2000);
+    return () => clearInterval(pollInterval);
   }, [currentHotelId]);
 
   // Handle Hotel Registration

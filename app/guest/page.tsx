@@ -156,6 +156,30 @@ export default function GuestPWAView() {
     loadGuestData(selectedHotelId);
   }, [selectedHotelId, hotels]);
 
+  // Real-time automatic background polling every 2 seconds
+  useEffect(() => {
+    const pollInterval = setInterval(() => {
+      fetch(`/api/orders?hotelId=${selectedHotelId}`)
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (data?.orders) {
+            setActiveOrders((prevOrders) => {
+              const prev = prevOrders[0];
+              const next = data.orders[0];
+              // If status changed on the active order, play audio chime!
+              if (prev && next && prev.id === next.id && prev.status !== next.status) {
+                playKitchenChime();
+              }
+              return data.orders;
+            });
+          }
+        })
+        .catch(() => {});
+    }, 2000);
+
+    return () => clearInterval(pollInterval);
+  }, [selectedHotelId]);
+
   // Load Menu & Orders
   const loadGuestData = async (hotelId = selectedHotelId) => {
     try {
