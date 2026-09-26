@@ -1,7 +1,7 @@
 // server/db.ts
 // Ultra-fast in-memory + Supabase integrated data layer with strict tenant isolation
 
-import { GUEST_HOTELS_SEED, GUEST_MENU_SEED } from '@/db/seed/guest/guest_seed';
+import { GUEST_HOTELS_SEED, GUEST_MENU_SEED, BASE_REQUEST_PRESETS } from '@/db/seed/guest/guest_seed';
 import { OPS_STAFF_SEED, OPS_ROOMS_SEED, OPS_STAYS_SEED } from '@/db/seed/ops/ops_seed';
 import { logAuditEvent } from './audit';
 import { enqueueOutboxEvent } from './outbox';
@@ -382,7 +382,25 @@ class ResortBrainDatabase {
       id: hotelId,
       slug: params.slug,
       name: params.name,
+      short_name: params.name.slice(0, 15),
       tagline: params.tagline || 'Luxury Hospitality & Operations',
+      accent: '#f2bd5c',
+      time_zone: 'Asia/Kolkata',
+      contact: {
+        phone: '+91 80 5550 0100',
+        email: params.managerEmail || 'concierge@example.com',
+        address: `${params.name} Sanctuary Avenue, India`,
+        gstin: '29AAAAA0000A1Z5',
+      },
+      request_presets: BASE_REQUEST_PRESETS,
+      info: {
+        wifi_name: `${params.name}-Guest`,
+        checkout_time: '11:00',
+        breakfast_hours: '07:00–10:30',
+        pool_hours: '07:00–21:00',
+        delivery_estimate: '25–35 min',
+      },
+      category_order: ['All-Day Gourmet Dining', 'Signature Grills', 'Beverages'],
       logo_url: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=120&auto=format&fit=crop&q=80',
       banner_url: 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?w=1200&auto=format&fit=crop&q=80',
       currency: params.currency || 'INR',
@@ -430,6 +448,7 @@ class ResortBrainDatabase {
         is_veg: true,
         allergen_tags: ['Gluten'],
         is_available: true,
+        featured: true,
       },
       {
         id: `item-${hotelId}-2`,
@@ -442,6 +461,7 @@ class ResortBrainDatabase {
         is_veg: true,
         allergen_tags: ['Dairy'],
         is_available: true,
+        featured: false,
       },
       {
         id: `item-${hotelId}-3`,
@@ -454,6 +474,7 @@ class ResortBrainDatabase {
         is_veg: true,
         allergen_tags: [],
         is_available: true,
+        featured: false,
       }
     );
 
