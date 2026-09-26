@@ -1,31 +1,31 @@
 'use client';
 
+// app/guest/page.tsx
+// Standalone Mobile Guest Concierge PWA for Resort Guests
+// Dynamic Multi-Hotel support, Live Order Tracking, Room Service, Butler Requests & Folio Settle
+
 import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
 import {
-  Utensils,
+  UtensilsCrossed,
   ConciergeBell,
   Receipt,
-  Clock,
-  CheckCircle2,
-  Plus,
-  Minus,
-  ShoppingBag,
-  Building,
-  KeyRound,
-  Printer,
-  ChevronRight,
   Sun,
   Moon,
-  Sparkles,
+  Plus,
+  Minus,
+  CheckCircle2,
+  Clock,
+  KeyRound,
   ArrowLeft,
-  Share2,
+  ChevronRight,
+  ShieldCheck,
+  ShoppingBag,
+  Info,
 } from 'lucide-react';
-import Link from 'next/link';
-import { playKitchenChime } from '@/components/sound';
 
 interface MenuItem {
   id: string;
-  hotel_id: string;
   category: string;
   name: string;
   description: string;
@@ -49,14 +49,42 @@ interface Order {
   created_at: string;
 }
 
+interface HotelOption {
+  id: string;
+  slug: string;
+  name: string;
+  tagline?: string;
+  currency?: string;
+  activeStay: {
+    stayId: string;
+    roomNumber: string;
+    guestName: string;
+    stayToken: string;
+  };
+}
+
+interface InvoiceData {
+  id: string;
+  invoice_number: string;
+  subtotal_paise: number;
+  tax_paise: number;
+  service_charge_paise: number;
+  total_paise: number;
+  status: 'draft' | 'issued' | 'paid';
+}
+
 export default function GuestPWAView() {
   const [isDark, setIsDark] = useState(true);
+
+  // Dynamic Hotels List & Selected Hotel
+  const [hotels, setHotels] = useState<HotelOption[]>([]);
   const [selectedHotelId, setSelectedHotelId] = useState('hotel-001');
 
-  // Hotel Info
+  // Hotel & Room Stay Info
   const [hotelTitle, setHotelTitle] = useState('Grand Azure Resort & Spa');
   const [roomNumber, setRoomNumber] = useState('Room 304');
   const [guestName, setGuestName] = useState('Dr. Siddharth Verma');
+  const [currentStayToken, setCurrentStayToken] = useState('stay_token_live_demo_room_304');
 
   // Menu & Cart
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
@@ -73,10 +101,13 @@ export default function GuestPWAView() {
   const [requestTitle, setRequestTitle] = useState('Extra Plush Bath Towels & Lavender Diffuser');
   const [requestSuccess, setRequestSuccess] = useState(false);
 
+  // Folio Billing State
   const [isBillOpen, setIsBillOpen] = useState(false);
+  const [invoice, setInvoice] = useState<InvoiceData | null>(null);
   const [billSettled, setBillSettled] = useState(false);
+  const [isPaying, setIsPaying] = useState(false);
 
-  // Sync dark mode
+  // Sync dark mode class
   useEffect(() => {
     if (isDark) {
       document.documentElement.classList.add('dark');
@@ -85,16 +116,56 @@ export default function GuestPWAView() {
     }
   }, [isDark]);
 
-  // Load Data
-  const loadGuestData = async () => {
+  // Fetch dynamic hotels on mount
+  useEffect(() => {
+    const fetchHotels = async () => {
+      try {
+        const res = await fetch('/api/hotels');
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data.hotels) && data.hotels.length > 0) {
+            setHotels(data.hotels);
+            const found = data.hotels.find((h: HotelOption) => h.id === selectedHotelId) || data.hotels[0];
+            if (found) {
+              setSelectedHotelId(found.id);
+              setHotelTitle(found.name);
+              setRoomNumber(found.activeStay?.roomNumber || 'Room 101');
+              setGuestName(found.activeStay?.guestName || 'Valued Guest');
+              setCurrentStayToken(found.activeStay?.stayToken || `token_${found.slug}_room_101`);
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load hotels:', err);
+      }
+    };
+    fetchHotels();
+  }, []);
+
+  // Sync when hotel selection changes
+  useEffect(() => {
+    if (hotels.length > 0) {
+      const found = hotels.find((h) => h.id === selectedHotelId);
+      if (found) {
+        setHotelTitle(found.name);
+        setRoomNumber(found.activeStay?.roomNumber || 'Room 101');
+        setGuestName(found.activeStay?.guestName || 'Valued Guest');
+        setCurrentStayToken(found.activeStay?.stayToken || `token_${found.slug}_room_101`);
+      }
+    }
+    loadGuestData(selectedHotelId);
+  }, [selectedHotelId, hotels]);
+
+  // Load Menu & Orders
+  const loadGuestData = async (hotelId = selectedHotelId) => {
     try {
-      const menuRes = await fetch(`/api/menu?hotelId=${selectedHotelId}`);
+      const menuRes = await fetch(`/api/menu?hotelId=${hotelId}`);
       if (menuRes.ok) {
         const data = await menuRes.json();
         setMenuItems(data.items || []);
       }
 
-      const orderRes = await fetch(`/api/orders?hotelId=${selectedHotelId}`);
+      const orderRes = await fetch(`/api/orders?hotelId=${hotelId}`);
       if (orderRes.ok) {
         const data = await orderRes.json();
         setActiveOrders(data.orders || []);
@@ -103,19 +174,6 @@ export default function GuestPWAView() {
       console.error('Failed to load guest data:', err);
     }
   };
-
-  useEffect(() => {
-    if (selectedHotelId === 'hotel-001') {
-      setHotelTitle('Grand Azure Resort & Spa');
-      setRoomNumber('Room 304');
-      setGuestName('Dr. Siddharth Verma');
-    } else {
-      setHotelTitle('The Leela Palace Resort & Spa');
-      setRoomNumber('Villa 101');
-      setGuestName('Nihal Kumar');
-    }
-    loadGuestData();
-  }, [selectedHotelId]);
 
   // Cart Functions
   const addToCart = (id: string) => {
@@ -141,12 +199,30 @@ export default function GuestPWAView() {
 
   const cartItemsCount = Object.values(cart).reduce((a, b) => a + b, 0);
 
+  // Synthesize Bell Chime audio
+  const playKitchenChime = () => {
+    try {
+      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(880, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.6);
+      gain.gain.setValueAtTime(0.3, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.6);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.6);
+    } catch {}
+  };
+
   // Place Order
   const handlePlaceOrder = async () => {
     if (cartItemsCount === 0) return;
 
     const payload = {
-      stayToken: selectedHotelId === 'hotel-001' ? 'stay_token_live_demo_room_304' : 'token_the-leela-palace_room_101',
+      stayToken: currentStayToken,
       items: Object.entries(cart).map(([menuItemId, quantity]) => ({ menuItemId, quantity })),
       specialInstructions: specialInstructions || undefined,
       idempotencyKey: `ord_${Date.now()}`,
@@ -164,7 +240,7 @@ export default function GuestPWAView() {
         setSpecialInstructions('');
         setIsCartOpen(false);
         playKitchenChime();
-        await loadGuestData();
+        await loadGuestData(selectedHotelId);
       }
     } catch (err) {
       console.error('Failed to place order:', err);
@@ -174,7 +250,7 @@ export default function GuestPWAView() {
   // Submit Service Request
   const handleSendRequest = async () => {
     const payload = {
-      stayToken: selectedHotelId === 'hotel-001' ? 'stay_token_live_demo_room_304' : 'token_the-leela-palace_room_101',
+      stayToken: currentStayToken,
       category: requestCategory,
       title: requestTitle,
       details: 'Guest requested prompt service via mobile concierge.',
@@ -201,6 +277,48 @@ export default function GuestPWAView() {
     }
   };
 
+  // Load Folio Bill
+  const openFolioModal = async () => {
+    setIsBillOpen(true);
+    try {
+      const res = await fetch(`/api/billing?stayToken=${encodeURIComponent(currentStayToken)}`);
+      if (res.ok) {
+        const data = await res.json();
+        setInvoice(data.invoice);
+        setBillSettled(data.invoice?.status === 'paid');
+      }
+    } catch (err) {
+      console.error('Failed to load bill:', err);
+    }
+  };
+
+  // Pay & Settle Folio
+  const handlePayInvoice = async () => {
+    if (!invoice) return;
+    setIsPaying(true);
+    try {
+      const res = await fetch('/api/billing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          stayToken: currentStayToken,
+          invoiceId: invoice.id,
+          amountPaise: invoice.total_paise,
+          idempotencyKey: `pay_${Date.now()}`,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setInvoice(data.invoice);
+        setBillSettled(true);
+      }
+    } catch (err) {
+      console.error('Failed to settle bill:', err);
+    } finally {
+      setIsPaying(false);
+    }
+  };
+
   const categories = ['All', ...Array.from(new Set(menuItems.map((m) => m.category)))];
   const filteredItems = menuItems.filter((item) => {
     if (selectedCategory !== 'All' && item.category !== selectedCategory) return false;
@@ -221,15 +339,18 @@ export default function GuestPWAView() {
             <span className="hidden sm:inline">Back to SaaS Website</span>
           </Link>
 
-          {/* Hotel & Room Switcher */}
+          {/* Dynamic Hotel & Room Switcher (Matches /console exactly) */}
           <div className="flex items-center gap-2">
             <select
               value={selectedHotelId}
               onChange={(e) => setSelectedHotelId(e.target.value)}
-              className="text-xs px-2.5 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-bold focus:ring-1 focus:ring-amber-500"
+              className="text-xs px-2.5 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-bold focus:ring-1 focus:ring-amber-500 max-w-[220px] truncate"
             >
-              <option value="hotel-001">Grand Azure (Room 304)</option>
-              <option value="the-leela-palace">The Leela Palace (Villa 101)</option>
+              {hotels.map((h) => (
+                <option key={h.id} value={h.id}>
+                  {h.name} ({h.activeStay?.roomNumber || 'Room 101'})
+                </option>
+              ))}
             </select>
 
             <button
@@ -268,7 +389,7 @@ export default function GuestPWAView() {
               </button>
 
               <button
-                onClick={() => setIsBillOpen(true)}
+                onClick={openFolioModal}
                 className="py-2.5 px-3 rounded-2xl bg-gradient-to-r from-amber-600 to-amber-500 hover:brightness-105 text-xs font-black text-slate-950 flex items-center justify-center gap-2 shadow-lg transition-all"
               >
                 <Receipt className="w-4 h-4" />
@@ -285,38 +406,50 @@ export default function GuestPWAView() {
               <span className="font-extrabold flex items-center gap-1.5 text-amber-500">
                 <Clock className="w-4 h-4" /> Order {activeOrders[0].order_number} Tracking
               </span>
-              <span className="px-2.5 py-0.5 rounded-full font-black uppercase bg-amber-500/10 text-amber-500">
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-500/10 text-amber-500 border border-amber-500/20">
                 {activeOrders[0].status}
               </span>
             </div>
 
-            {/* 5-Step Visual Progression */}
-            <div className="grid grid-cols-5 gap-1 text-center pt-1">
+            {/* 5-Step Visual Progress Bar */}
+            <div className="grid grid-cols-5 gap-1 pt-2">
               {[
-                { key: 'pending', label: 'Placed' },
-                { key: 'accepted', label: 'Accepted' },
-                { key: 'preparing', label: 'Cooking' },
-                { key: 'ready', label: 'Runner' },
-                { key: 'delivered', label: 'Delivered' },
-              ].map((step, idx) => {
-                const stages = ['pending', 'accepted', 'preparing', 'ready', 'delivered'];
-                const currentStageIdx = stages.indexOf(activeOrders[0].status);
-                const isPassed = currentStageIdx >= idx;
-                const isCurrent = currentStageIdx === idx;
+                { key: 'pending', label: 'Placed', step: 1 },
+                { key: 'accepted', label: 'Accepted', step: 2 },
+                { key: 'preparing', label: 'Cooking', step: 3 },
+                { key: 'ready', label: 'Runner', step: 4 },
+                { key: 'delivered', label: 'Delivered', step: 5 },
+              ].map((s) => {
+                const orderSteps: Record<string, number> = {
+                  pending: 1,
+                  accepted: 2,
+                  preparing: 3,
+                  ready: 4,
+                  delivered: 5,
+                };
+                const currentStep = orderSteps[activeOrders[0].status] || 1;
+                const isPassed = s.step <= currentStep;
+                const isCurrent = s.step === currentStep;
 
                 return (
-                  <div key={step.key} className="flex flex-col items-center">
+                  <div key={s.key} className="flex flex-col items-center gap-1 text-center">
                     <div
-                      className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black transition-all ${
-                        isPassed
-                          ? 'bg-amber-500 text-slate-950 ring-2 ring-amber-500/30'
+                      className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-black transition-all ${
+                        isCurrent
+                          ? 'bg-amber-500 text-slate-950 ring-4 ring-amber-500/20 shadow-md'
+                          : isPassed
+                          ? 'bg-amber-500/20 text-amber-500 border border-amber-500/30'
                           : 'bg-slate-100 dark:bg-slate-800 text-slate-400'
-                      } ${isCurrent ? 'animate-bounce' : ''}`}
+                      }`}
                     >
-                      {isPassed ? <CheckCircle2 className="w-3.5 h-3.5" /> : idx + 1}
+                      {isPassed && !isCurrent ? '✓' : s.step}
                     </div>
-                    <span className={`text-[10px] mt-1 ${isPassed ? 'text-amber-500 font-bold' : 'text-slate-400'}`}>
-                      {step.label}
+                    <span
+                      className={`text-[10px] font-semibold ${
+                        isCurrent ? 'text-amber-500' : isPassed ? 'text-slate-200' : 'text-slate-500'
+                      }`}
+                    >
+                      {s.label}
                     </span>
                   </div>
                 );
@@ -325,94 +458,95 @@ export default function GuestPWAView() {
           </div>
         )}
 
-        {/* Menu Section Header */}
-        <div className="pt-2">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-lg font-black flex items-center gap-2">
-              <Utensils className="w-4 h-4 text-amber-500" />
-              In-Room Gourmet Dining
-            </h2>
-            <label className="flex items-center gap-1.5 text-xs font-bold text-slate-600 dark:text-slate-300 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={vegOnly}
-                onChange={(e) => setVegOnly(e.target.checked)}
-                className="rounded text-amber-500"
-              />
-              🥬 Pure Veg
-            </label>
+        {/* Section Header: In-Room Gourmet Dining */}
+        <div className="flex items-center justify-between pt-2">
+          <div className="flex items-center gap-2">
+            <UtensilsCrossed className="w-5 h-5 text-amber-500" />
+            <h2 className="text-lg font-black tracking-tight">In-Room Gourmet Dining</h2>
           </div>
 
-          {/* Category Filter Pills */}
-          <div className="flex gap-2 overflow-x-auto pb-2">
-            {categories.map((cat) => (
-              <button
-                key={cat}
-                onClick={() => setSelectedCategory(cat)}
-                className={`px-3.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all ${
-                  selectedCategory === cat
-                    ? 'bg-amber-500 text-slate-950 shadow-md'
-                    : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
-                }`}
-              >
-                {cat}
-              </button>
-            ))}
-          </div>
+          <label className="flex items-center gap-2 text-xs font-bold text-slate-400 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={vegOnly}
+              onChange={(e) => setVegOnly(e.target.checked)}
+              className="rounded accent-emerald-500 w-3.5 h-3.5 cursor-pointer"
+            />
+            <span>🌿 Pure Veg</span>
+          </label>
         </div>
 
-        {/* Menu Items List */}
-        <div className="space-y-4">
+        {/* Category Pills */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar text-xs">
+          {categories.map((cat) => (
+            <button
+              key={cat}
+              onClick={() => setSelectedCategory(cat)}
+              className={`px-3.5 py-1.5 rounded-full font-bold whitespace-nowrap transition-all ${
+                selectedCategory === cat
+                  ? 'bg-amber-500 text-slate-950 shadow-md'
+                  : 'bg-slate-200/70 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-700'
+              }`}
+            >
+              {cat}
+            </button>
+          ))}
+        </div>
+
+        {/* Menu Items Grid */}
+        <div className="space-y-3">
           {filteredItems.map((item) => {
-            const inCartQty = cart[item.id] || 0;
+            const inCartCount = cart[item.id] || 0;
             return (
               <div
                 key={item.id}
-                className="p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex gap-3.5 items-center justify-between shadow-sm hover:border-amber-500/40 transition-all"
+                className="p-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 shadow-sm flex items-center justify-between gap-3 hover:border-amber-500/40 transition-colors"
               >
-                <div className="flex gap-3 items-center">
-                  <div className="relative w-20 h-20 rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-800 flex-shrink-0">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-16 h-16 rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-800 shrink-0 border border-slate-200 dark:border-slate-700">
                     <img src={item.image_url} alt={item.name} className="w-full h-full object-cover" />
-                    <span
-                      className={`absolute top-1 left-1 px-1.5 py-0.2 rounded text-[8px] font-black uppercase text-white ${
-                        item.is_veg ? 'bg-emerald-600' : 'bg-rose-600'
-                      }`}
-                    >
-                      {item.is_veg ? 'Veg' : 'Non-Veg'}
-                    </span>
                   </div>
-
-                  <div>
-                    <h3 className="font-extrabold text-sm">{item.name}</h3>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span
+                        className={`text-[9px] font-black px-1.5 py-0.5 rounded border ${
+                          item.is_veg
+                            ? 'text-emerald-500 border-emerald-500/40 bg-emerald-500/10'
+                            : 'text-rose-500 border-rose-500/40 bg-rose-500/10'
+                        }`}
+                      >
+                        {item.is_veg ? 'VEG' : 'NON-VEG'}
+                      </span>
+                      <h3 className="font-bold text-xs truncate text-slate-900 dark:text-white">{item.name}</h3>
+                    </div>
                     <p className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-1 mt-0.5">
                       {item.description}
                     </p>
-                    <div className="font-black text-amber-500 text-sm mt-1">₹{(item.price_paise / 100).toFixed(2)}</div>
+                    <p className="font-extrabold text-xs text-amber-500 mt-1">
+                      ₹{(item.price_paise / 100).toFixed(2)}
+                    </p>
                   </div>
                 </div>
 
-                <div className="flex-shrink-0">
-                  {inCartQty === 0 ? (
+                {/* Cart Action Buttons */}
+                <div className="shrink-0">
+                  {inCartCount === 0 ? (
                     <button
                       onClick={() => addToCart(item.id)}
-                      className="px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 hover:bg-amber-500 hover:text-slate-950 text-slate-700 dark:text-slate-200 transition-all flex items-center gap-1"
+                      className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-amber-500 hover:text-slate-950 text-xs font-black transition-all flex items-center gap-1 shadow-sm border border-slate-200 dark:border-slate-700"
                     >
                       <Plus className="w-3.5 h-3.5" /> Add
                     </button>
                   ) : (
-                    <div className="flex items-center gap-1.5 bg-amber-500/10 border border-amber-500/30 rounded-xl p-1">
+                    <div className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/30 rounded-xl px-2 py-1">
                       <button
                         onClick={() => removeFromCart(item.id)}
-                        className="w-7 h-7 rounded-lg bg-amber-500 text-slate-950 flex items-center justify-center font-bold text-xs"
+                        className="text-amber-500 font-black hover:scale-110"
                       >
                         <Minus className="w-3 h-3" />
                       </button>
-                      <span className="font-black text-xs px-1 text-amber-500">{inCartQty}</span>
-                      <button
-                        onClick={() => addToCart(item.id)}
-                        className="w-7 h-7 rounded-lg bg-amber-500 text-slate-950 flex items-center justify-center font-bold text-xs"
-                      >
+                      <span className="font-black text-xs text-amber-500 min-w-4 text-center">{inCartCount}</span>
+                      <button onClick={() => addToCart(item.id)} className="text-amber-500 font-black hover:scale-110">
                         <Plus className="w-3 h-3" />
                       </button>
                     </div>
@@ -424,211 +558,242 @@ export default function GuestPWAView() {
         </div>
       </main>
 
-      {/* Floating Bottom Cart Bar */}
+      {/* Floating View Cart Sticky Bottom Bar */}
       {cartItemsCount > 0 && (
-        <div className="fixed bottom-4 left-0 right-0 z-30 px-4">
-          <div className="max-w-md mx-auto">
+        <div className="fixed bottom-4 inset-x-0 z-40 max-w-2xl mx-auto px-4">
+          <div className="p-3 rounded-2xl bg-gradient-to-r from-amber-600 to-amber-500 text-slate-950 shadow-2xl flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl bg-black/10 flex items-center justify-center font-black text-xs">
+                {cartItemsCount}
+              </div>
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-900/80">Room Order Cart</p>
+                <p className="font-black text-sm">₹{(cartTotalPaise / 100).toFixed(2)}</p>
+              </div>
+            </div>
+
             <button
               onClick={() => setIsCartOpen(true)}
-              className="w-full py-3.5 px-5 rounded-2xl bg-gradient-to-r from-amber-600 via-amber-500 to-amber-600 text-slate-950 font-black shadow-2xl flex items-center justify-between hover:scale-[1.02] transition-all"
+              className="px-4 py-2 rounded-xl bg-slate-950 text-amber-400 font-black text-xs flex items-center gap-1.5 shadow hover:brightness-110 transition-all"
             >
-              <div className="flex items-center gap-2.5">
-                <ShoppingBag className="w-5 h-5" />
-                <span className="text-sm">{cartItemsCount} {cartItemsCount === 1 ? 'item' : 'items'} in Tray</span>
-              </div>
-              <div className="flex items-center gap-2 font-black text-sm">
-                <span>₹{(cartTotalPaise / 100).toFixed(2)}</span>
-                <ChevronRight className="w-4 h-4" />
-              </div>
+              <span>Review Order</span>
+              <ChevronRight className="w-4 h-4" />
             </button>
           </div>
         </div>
       )}
 
-      {/* Cart Tray Drawer */}
+      {/* Cart Review Drawer Modal */}
       {isCartOpen && (
-        <div className="fixed inset-0 z-50 flex justify-end bg-black/70 backdrop-blur-sm">
-          <div className="w-full max-w-md h-full bg-white dark:bg-slate-900 p-6 flex flex-col justify-between shadow-2xl border-l border-slate-200 dark:border-slate-800">
-            <div>
-              <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800">
-                <h3 className="text-lg font-black flex items-center gap-2">
-                  <ShoppingBag className="w-5 h-5 text-amber-500" />
-                  Your Dining Order
-                </h3>
-                <button onClick={() => setIsCartOpen(false)} className="text-slate-400 hover:text-white">✕</button>
-              </div>
-
-              <div className="py-4 space-y-3 max-h-[50vh] overflow-y-auto">
-                {Object.entries(cart).map(([id, qty]) => {
-                  const item = menuItems.find((m) => m.id === id);
-                  if (!item) return null;
-                  return (
-                    <div key={id} className="flex items-center justify-between text-xs">
-                      <div>
-                        <div className="font-extrabold text-sm">{item.name}</div>
-                        <div className="text-amber-500 font-bold">₹{((item.price_paise * qty) / 100).toFixed(2)}</div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => removeFromCart(id)}
-                          className="w-7 h-7 rounded bg-slate-200 dark:bg-slate-800 flex items-center justify-center font-bold"
-                        >
-                          -
-                        </button>
-                        <span className="font-black">{qty}</span>
-                        <button
-                          onClick={() => addToCart(id)}
-                          className="w-7 h-7 rounded bg-slate-200 dark:bg-slate-800 flex items-center justify-center font-bold"
-                        >
-                          +
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-slate-400">Special Chef Notes</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Mild spice, extra ice in coconut water"
-                  value={specialInstructions}
-                  onChange={(e) => setSpecialInstructions(e.target.value)}
-                  className="w-full mt-1 px-3 py-2 rounded-xl text-xs bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700"
-                />
-              </div>
-            </div>
-
-            <div className="pt-4 border-t border-slate-200 dark:border-slate-800 space-y-3">
-              <div className="space-y-1 text-xs text-slate-400">
-                <div className="flex justify-between">
-                  <span>Subtotal</span>
-                  <span>₹{(cartTotalPaise / 100).toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>GST (18% Server Verified)</span>
-                  <span>₹{((cartTotalPaise * 0.18) / 100).toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between text-white font-black text-sm pt-2 border-t border-slate-200 dark:border-slate-800 text-amber-500">
-                  <span>Estimated Total</span>
-                  <span>₹{((cartTotalPaise * 1.23) / 100).toFixed(2)}</span>
-                </div>
-              </div>
-
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/70 backdrop-blur-sm">
+          <div className="w-full max-w-lg bg-white dark:bg-slate-900 rounded-t-3xl sm:rounded-3xl p-6 border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4 max-h-[85vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
+              <h3 className="font-black text-lg flex items-center gap-2">
+                <ShoppingBag className="w-5 h-5 text-amber-500" />
+                Review Your Cart
+              </h3>
               <button
-                onClick={handlePlaceOrder}
-                className="w-full py-3.5 rounded-2xl font-black text-sm bg-gradient-to-r from-amber-600 to-amber-500 text-slate-950 shadow-xl hover:brightness-105 transition-all"
+                onClick={() => setIsCartOpen(false)}
+                className="w-7 h-7 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-xs font-bold text-slate-400"
               >
-                Send Order to Kitchen 🍳
+                ✕
               </button>
             </div>
+
+            <div className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
+              {Object.entries(cart).map(([id, qty]) => {
+                const item = menuItems.find((m) => m.id === id);
+                if (!item) return null;
+                return (
+                  <div key={id} className="py-2.5 flex items-center justify-between">
+                    <div>
+                      <p className="font-bold text-slate-900 dark:text-white">{item.name}</p>
+                      <p className="text-[11px] text-slate-400">
+                        ₹{(item.price_paise / 100).toFixed(2)} × {qty}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-extrabold text-amber-500">
+                        ₹{((item.price_paise * qty) / 100).toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Special Chef Instructions */}
+            <div className="space-y-1">
+              <label className="text-[11px] font-bold text-slate-400">Special Instructions for Chef / Runner</label>
+              <input
+                type="text"
+                placeholder="E.g. Less spicy, extra cutlery, ring bell twice"
+                value={specialInstructions}
+                onChange={(e) => setSpecialInstructions(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl text-xs bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700"
+              />
+            </div>
+
+            {/* Server-Authoritative Totals Breakdown */}
+            <div className="p-3.5 rounded-2xl bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-2 text-xs">
+              <div className="flex justify-between text-slate-400">
+                <span>Subtotal:</span>
+                <span className="font-bold text-slate-800 dark:text-white">
+                  ₹{(cartTotalPaise / 100).toFixed(2)}
+                </span>
+              </div>
+              <div className="flex justify-between text-slate-400">
+                <span>GST (18%):</span>
+                <span className="font-bold text-slate-800 dark:text-white">
+                  ₹{((cartTotalPaise * 0.18) / 100).toFixed(2)}
+                </span>
+              </div>
+              <div className="flex justify-between text-slate-400">
+                <span>Service Charge (5%):</span>
+                <span className="font-bold text-slate-800 dark:text-white">
+                  ₹{((cartTotalPaise * 0.05) / 100).toFixed(2)}
+                </span>
+              </div>
+              <div className="flex justify-between font-black text-sm pt-2 border-t border-slate-300 dark:border-slate-700 text-amber-500">
+                <span>Grand Total:</span>
+                <span>₹{((cartTotalPaise * 1.23) / 100).toFixed(2)}</span>
+              </div>
+            </div>
+
+            {/* Submit Order */}
+            <button
+              onClick={handlePlaceOrder}
+              className="w-full py-3.5 rounded-xl font-black text-xs bg-amber-500 text-slate-950 shadow-lg hover:brightness-105 transition-all flex items-center justify-center gap-2"
+            >
+              <CheckCircle2 className="w-4 h-4" /> Place In-Room Order (To {roomNumber})
+            </button>
           </div>
         </div>
       )}
 
-      {/* Butler / Amenities Request Modal */}
+      {/* Butler & Amenities Modal */}
       {isRequestModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
           <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4">
-            <h3 className="text-lg font-black flex items-center gap-2">
-              <ConciergeBell className="w-5 h-5 text-amber-500" />
-              Request Butler & Amenities
-            </h3>
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
+              <h3 className="font-black text-lg flex items-center gap-2">
+                <ConciergeBell className="w-5 h-5 text-amber-500" />
+                Butler & Room Service
+              </h3>
+              <button onClick={() => setIsRequestModalOpen(false)} className="text-slate-400">✕</button>
+            </div>
 
             {requestSuccess ? (
-              <div className="py-6 text-center text-emerald-500 font-bold space-y-2">
-                <CheckCircle2 className="w-10 h-10 mx-auto" />
-                <p className="text-sm">Request Dispatched! Housekeeping notified.</p>
+              <div className="py-8 text-center space-y-2">
+                <CheckCircle2 className="w-12 h-12 text-emerald-500 mx-auto" />
+                <h4 className="font-black text-base">Request Dispatched!</h4>
+                <p className="text-xs text-slate-400">A dedicated team member has been notified.</p>
               </div>
             ) : (
-              <div className="space-y-3 text-xs">
+              <div className="space-y-4 text-xs">
                 <div>
-                  <label className="font-bold text-slate-400">Department</label>
-                  <select
-                    value={requestCategory}
-                    onChange={(e) => setRequestCategory(e.target.value as 'housekeeping' | 'amenities' | 'front_desk')}
-                    className="w-full mt-1 px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-bold"
-                  >
-                    <option value="housekeeping">Housekeeping & Towels</option>
-                    <option value="amenities">Spa Toiletries & Diffuser</option>
-                    <option value="front_desk">Front Desk & Luggage</option>
-                  </select>
+                  <label className="font-bold text-slate-400 block mb-1.5">Department Category</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { key: 'housekeeping', label: 'Housekeeping' },
+                      { key: 'amenities', label: 'Amenities' },
+                      { key: 'front_desk', label: 'Front Desk' },
+                    ].map((c) => (
+                      <button
+                        key={c.key}
+                        onClick={() => setRequestCategory(c.key as any)}
+                        className={`py-2 rounded-xl font-bold border transition-all ${
+                          requestCategory === c.key
+                            ? 'bg-amber-500/10 text-amber-500 border-amber-500'
+                            : 'border-slate-200 dark:border-slate-700 text-slate-400'
+                        }`}
+                      >
+                        {c.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 <div>
-                  <label className="font-bold text-slate-400">Request Item</label>
+                  <label className="font-bold text-slate-400 block mb-1.5">Request Details</label>
                   <input
                     type="text"
                     value={requestTitle}
                     onChange={(e) => setRequestTitle(e.target.value)}
-                    className="w-full mt-1 px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700"
+                    placeholder="E.g. Extra pillows, AC check, bottle of water"
+                    className="w-full px-3 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700"
                   />
                 </div>
 
-                <div className="flex gap-2 pt-2">
-                  <button
-                    onClick={() => setIsRequestModalOpen(false)}
-                    className="w-1/2 py-2.5 rounded-xl font-bold bg-slate-100 dark:bg-slate-800 text-slate-400"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleSendRequest}
-                    className="w-1/2 py-2.5 rounded-xl font-black bg-amber-500 text-slate-950 shadow"
-                  >
-                    Send Request
-                  </button>
-                </div>
+                <button
+                  onClick={handleSendRequest}
+                  className="w-full py-3 rounded-xl font-black text-xs bg-amber-500 text-slate-950 shadow hover:brightness-105 transition-all"
+                >
+                  Send Request to Housekeeping
+                </button>
               </div>
             )}
           </div>
         </div>
       )}
 
-      {/* Folio / Bill Modal */}
+      {/* Room Folio Bill & Settle Modal */}
       {isBillOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
           <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
               <h3 className="font-black text-lg flex items-center gap-2">
                 <Receipt className="w-5 h-5 text-amber-500" />
-                Room Folio Settle
+                Live Room Folio & Invoice
               </h3>
               <button onClick={() => setIsBillOpen(false)} className="text-slate-400">✕</button>
             </div>
 
             <div className="text-xs space-y-3">
-              <div className="flex justify-between text-slate-400">
-                <span>Room Dining & Amenities:</span>
-                <span className="font-bold text-white">₹1,050.00</span>
+              <div className="flex items-center justify-between text-[11px] text-slate-400">
+                <span>Invoice: {invoice?.invoice_number || 'INV-2026-LIVE'}</span>
+                <span className="font-bold text-amber-500 uppercase">{invoice?.status || 'Draft'}</span>
               </div>
-              <div className="flex justify-between text-slate-400">
-                <span>GST (18%):</span>
-                <span className="font-bold text-white">₹189.00</span>
-              </div>
-              <div className="flex justify-between text-slate-400">
-                <span>Service Charge (5%):</span>
-                <span className="font-bold text-white">₹52.50</span>
-              </div>
-              <div className="flex justify-between font-black text-sm pt-2 border-t border-slate-300 dark:border-slate-700 text-amber-500">
-                <span>Total Due:</span>
-                <span>₹1,291.50</span>
+
+              <div className="p-3 rounded-2xl bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-2">
+                <div className="flex justify-between text-slate-400">
+                  <span>Room Dining & Amenities:</span>
+                  <span className="font-bold text-slate-900 dark:text-white">
+                    ₹{(((invoice?.subtotal_paise || 0)) / 100).toFixed(2)}
+                  </span>
+                </div>
+                <div className="flex justify-between text-slate-400">
+                  <span>GST (18%):</span>
+                  <span className="font-bold text-slate-900 dark:text-white">
+                    ₹{(((invoice?.tax_paise || 0)) / 100).toFixed(2)}
+                  </span>
+                </div>
+                <div className="flex justify-between text-slate-400">
+                  <span>Service Charge (5%):</span>
+                  <span className="font-bold text-slate-900 dark:text-white">
+                    ₹{(((invoice?.service_charge_paise || 0)) / 100).toFixed(2)}
+                  </span>
+                </div>
+                <div className="flex justify-between font-black text-sm pt-2 border-t border-slate-300 dark:border-slate-700 text-amber-500">
+                  <span>Total Amount Due:</span>
+                  <span>₹{(((invoice?.total_paise || 0)) / 100).toFixed(2)}</span>
+                </div>
               </div>
 
               {billSettled ? (
                 <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-center space-y-1">
                   <div className="text-emerald-500 font-bold flex items-center justify-center gap-1">
-                    <CheckCircle2 className="w-4 h-4" /> Paid in Test Mode
+                    <CheckCircle2 className="w-4 h-4" /> Paid & Settled in Test Mode
                   </div>
-                  <p className="text-[10px] text-slate-400">Invoice settled.</p>
+                  <p className="text-[10px] text-slate-400">Zero balance due. Receipt recorded on folio ledger.</p>
                 </div>
               ) : (
                 <button
-                  onClick={() => setBillSettled(true)}
-                  className="w-full py-3 rounded-xl font-black text-xs bg-amber-500 text-slate-950 shadow hover:brightness-105"
+                  disabled={isPaying || !invoice || invoice.total_paise === 0}
+                  onClick={handlePayInvoice}
+                  className="w-full py-3 rounded-xl font-black text-xs bg-amber-500 text-slate-950 shadow hover:brightness-105 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                 >
-                  Pay & Settle (Test Mode)
+                  {isPaying ? 'Processing Settlement...' : 'Pay & Settle (Test Mode)'}
                 </button>
               )}
             </div>
