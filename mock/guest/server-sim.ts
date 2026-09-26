@@ -55,8 +55,17 @@ interface MockRequestRecord {
   title: string;
   details?: string;
   priority: RequestPriority;
+  slaMinutes: number;
   createdAt: string;
 }
+
+// Department SLA tiers (playbook §5) — mirrors what M1 derives server-side from category/priority.
+const REQUEST_SLA_MINUTES: Record<RequestCategory, number> = {
+  front_desk: 10,
+  amenities: 15,
+  housekeeping: 20,
+  maintenance: 30,
+};
 
 interface MockInvoiceRecord {
   id: string;
@@ -271,6 +280,7 @@ function mapRequest(record: MockRequestRecord, now: number, divisor: number): Se
     priority: record.priority,
     roomNumber: record.roomNumber,
     assigneeFirstName: status === 'created' ? undefined : assigneeFirstName,
+    slaMinutes: record.slaMinutes,
     createdAt: record.createdAt,
     acknowledgedAt,
     completedAt,
@@ -290,11 +300,19 @@ function requestsForStay(stayId: string): MockRequestRecord[] {
 // this to the exact interface, including session-shape and event-subscription plumbing).
 // ---------------------------------------------------------------------------
 
-let orderCounter = 1000;
-let invoiceCounter = 4800;
-
 function newId(prefix: string): string {
   return `mock_${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+}
+
+// Derived from persisted state rather than a module-level counter, so a page reload (which
+// re-initialises this module) never reissues a number that's already on an earlier order/invoice.
+function nextSequenceNumber(existingNumbers: string[], prefix: string, start: number): string {
+  const max = existingNumbers.reduce((highest, value) => {
+    if (!value.startsWith(prefix)) return highest;
+    const n = Number(value.slice(prefix.length));
+    return Number.isFinite(n) && n > highest ? n : highest;
+  }, start);
+  return `${prefix}${max + 1}`;
 }
 
 export async function resolveQr(qrToken: string): Promise<GuestSession> {
@@ -353,7 +371,7 @@ export async function placeOrder(
     stayId: session.stayId,
     hotelId: session.hotelId,
     roomNumber: session.roomNumber,
-    orderNumber: `RB-${++orderCounter}`,
+    orderNumber: nextSequenceNumber(state.orders.map((o) => o.orderNumber), 'RB-', 1000),
     lines: priced.lines,
     subtotalPaise: priced.subtotalPaise,
     taxPaise: priced.taxPaise,
@@ -392,6 +410,7 @@ export async function createRequest(
     title: input.title,
     details: input.details,
     priority: input.priority,
+    slaMinutes: REQUEST_SLA_MINUTES[input.category],
     createdAt: new Date().toISOString(),
   };
   state.requests.unshift(record);
@@ -413,7 +432,7 @@ export async function listRequests(session: GuestSession): Promise<ServiceReques
 function findOrCreateInvoiceRecord(state: MockState, stayId: string): MockInvoiceRecord {
   let record = state.invoices.find((i) => i.stayId === stayId);
   if (!record) {
-    record = { id: newId('inv'), stayId, invoiceNumber: `INV-2026-${++invoiceCounter}`, status: 'issued' };
+    record = { id: newId('inv'), stayId, invoiceNumber: nextSequenceNumber(state.invoices.map((i) => i.invoiceNumber), 'INV-2026-', 4800), status: 'issued' };
     state.invoices.push(record);
   }
   return record;

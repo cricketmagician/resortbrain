@@ -101,6 +101,9 @@ export interface ServiceRequest {
   priority: RequestPriority;
   roomNumber: string;
   assigneeFirstName?: string;
+  /** Minutes the department has to acknowledge it, derived server-side by department rules —
+   *  read-only, for the guest DelayNotice threshold. Never sent by the client. */
+  slaMinutes?: number;
   createdAt: string;
   acknowledgedAt?: string;
   completedAt?: string;
