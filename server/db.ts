@@ -162,7 +162,11 @@ class ResortBrainDatabase {
   }
 
   public getStayByRoomQR(qrToken: string) {
-    const room = this.rooms.find((r) => r.qr_code_token === qrToken);
+    const normalized = qrToken.replace(/^QR_AZURE_/, 'QR_GRAND-AZURE_');
+    const alias = qrToken.replace(/^QR_GRAND-AZURE_/, 'QR_AZURE_');
+    const room = this.rooms.find(
+      (r) => r.qr_code_token === qrToken || r.qr_code_token === normalized || r.qr_code_token === alias
+    );
     if (!room) return null;
     return this.stays.find((s) => s.room_id === room.id && s.status === 'active') || null;
   }
