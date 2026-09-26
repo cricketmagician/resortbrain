@@ -42,13 +42,21 @@ export const GUEST_TID = {
   request: 'guest-request',
   requestCategory: (c: string) => `request-category-${c}`,
   requestPreset: (s: string) => `request-preset-${s}`,
+  requestDetails: 'request-details',
+  requestUrgent: 'request-urgent',
   requestSubmit: 'request-submit',
 
   activity: 'guest-activity',
+  activityFilter: (f: string) => `activity-filter-${f}`,
+  activityOrder: (id: string) => `activity-order-${id}`,
+  activityRequest: (id: string) => `activity-request-${id}`,
 
   orderTracking: 'guest-order-tracking',
   orderTimeline: 'order-status-timeline',
   orderCurrent: 'order-status-current',
+  orderLiveIndicator: 'order-live-indicator',
+  orderDelayNotice: 'order-delay-notice',
+  orderTotals: 'order-totals',
 
   requestTracking: 'guest-request-tracking',
   requestTimeline: 'request-status-timeline',

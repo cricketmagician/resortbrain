@@ -55,8 +55,17 @@ interface MockRequestRecord {
   title: string;
   details?: string;
   priority: RequestPriority;
+  slaMinutes: number;
   createdAt: string;
 }
+
+// Department SLA tiers (playbook §5) — mirrors what M1 derives server-side from category/priority.
+const REQUEST_SLA_MINUTES: Record<RequestCategory, number> = {
+  front_desk: 10,
+  amenities: 15,
+  housekeeping: 20,
+  maintenance: 30,
+};
 
 interface MockInvoiceRecord {
   id: string;
@@ -271,6 +280,7 @@ function mapRequest(record: MockRequestRecord, now: number, divisor: number): Se
     priority: record.priority,
     roomNumber: record.roomNumber,
     assigneeFirstName: status === 'created' ? undefined : assigneeFirstName,
+    slaMinutes: record.slaMinutes,
     createdAt: record.createdAt,
     acknowledgedAt,
     completedAt,
@@ -392,6 +402,7 @@ export async function createRequest(
     title: input.title,
     details: input.details,
     priority: input.priority,
+    slaMinutes: REQUEST_SLA_MINUTES[input.category],
     createdAt: new Date().toISOString(),
   };
   state.requests.unshift(record);
