@@ -25,14 +25,8 @@ export default function AdminLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const { currentHotel, allHotels, switchHotel, currentStaff } = useOps();
-  const [isLightMode, setIsLightMode] = useState(false);
-
-  const toggleTheme = () => {
-    setIsLightMode(!isLightMode);
-    document.documentElement.classList.toggle("dark");
-    document.documentElement.classList.toggle("light");
-  };
+  const { currentHotel, allHotels, switchHotel, currentStaff, theme, toggleTheme } = useOps();
+  const isLightMode = theme === "light";
 
   const adminNav = [
     {

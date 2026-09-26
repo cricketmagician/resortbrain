@@ -24,6 +24,9 @@ export default function HousekeepingPage() {
     serviceRequests,
     acceptServiceRequest,
     completeServiceRequest,
+    simulateIncomingServiceRequest,
+    isBuzzerRinging,
+    silenceBuzzer,
     currentStaff,
     showToast,
   } = useOps();
@@ -61,7 +64,7 @@ export default function HousekeepingPage() {
           </div>
         </div>
 
-        {/* Filter Controls */}
+        {/* Filter Controls & Sim Button */}
         <div className="flex flex-wrap items-center gap-2">
           {/* Floor Selector */}
           <div className="flex items-center gap-1.5 bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs">
@@ -94,8 +97,44 @@ export default function HousekeepingPage() {
               <option value="OOO" className="bg-slate-900">Out of Order ({oooCount})</option>
             </select>
           </div>
+
+          {/* Simulate New Request with Sharp Buzzer */}
+          <button
+            onClick={simulateIncomingServiceRequest}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-semibold text-xs bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-950/40 active:scale-95 transition-all cursor-pointer"
+            title="Fire an incoming guest service request with sharp buzzer"
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>+ New Request</span>
+          </button>
         </div>
       </div>
+
+      {/* Active Sharp Buzzer Alert Bar */}
+      {isBuzzerRinging && (
+        <div className="flex items-center justify-between p-3.5 rounded-xl bg-amber-500/15 border border-amber-500/50 text-amber-200 animate-pulse shadow-lg shadow-amber-950/30">
+          <div className="flex items-center gap-3">
+            <span className="flex h-3 w-3 relative">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500"></span>
+            </span>
+            <div>
+              <span className="font-bold text-sm tracking-wide text-amber-100 uppercase">
+                🔔 Sharp Buzzer Sounding: Unassigned Guest Service Request
+              </span>
+              <p className="text-xs text-amber-300/90">
+                Buzzer sounds until a housekeeping staff member clicks "ASSIGN TO ME".
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={silenceBuzzer}
+            className="px-3.5 py-1.5 rounded-lg text-xs font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 transition-colors shadow cursor-pointer"
+          >
+            Silence Buzzer
+          </button>
+        </div>
+      )}
 
       {/* 2. Summary KPI Ribbon */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-xs font-mono">

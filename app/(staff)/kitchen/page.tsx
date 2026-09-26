@@ -22,11 +22,14 @@ export default function KitchenKDSPage() {
   const {
     kitchenTickets,
     acceptTicket,
+    rejectOrHoldTicket,
     startPrepTicket,
     readyTicket,
     simulateIncomingOrder,
     isSoundMuted,
     toggleSound,
+    isBuzzerRinging,
+    silenceBuzzer,
     showToast,
   } = useOps();
 
@@ -144,7 +147,7 @@ export default function KitchenKDSPage() {
           {/* Time Clock */}
           <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800 font-mono text-xs text-slate-200">
             <Clock className="w-3.5 h-3.5 text-slate-400" />
-            <span>{currentTime || "12:44:18 PM"}</span>
+            <span suppressHydrationWarning>{currentTime || "12:44:18 PM"}</span>
           </div>
 
           {/* Add simulated test order */}
@@ -158,6 +161,32 @@ export default function KitchenKDSPage() {
           </button>
         </div>
       </div>
+
+      {/* Active Sharp Buzzer Alert Bar */}
+      {isBuzzerRinging && (
+        <div className="flex items-center justify-between p-3.5 rounded-xl bg-amber-500/15 border border-amber-500/50 text-amber-200 animate-pulse shadow-lg shadow-amber-950/30">
+          <div className="flex items-center gap-3">
+            <span className="flex h-3 w-3 relative">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500"></span>
+            </span>
+            <div>
+              <span className="font-bold text-sm tracking-wide text-amber-100 uppercase">
+                🔔 Sharp Buzzer Sounding: Urgent Unaccepted Order Received
+              </span>
+              <p className="text-xs text-amber-300/90">
+                Buzzer pulses continuously until kitchen chef accepts or holds the order.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={silenceBuzzer}
+            className="px-3.5 py-1.5 rounded-lg text-xs font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 transition-colors shadow cursor-pointer"
+          >
+            Silence Buzzer
+          </button>
+        </div>
+      )}
 
       {/* 2. Top Stats Ticker */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -258,12 +287,22 @@ export default function KitchenKDSPage() {
                         : ticket.status === "preparing"
                         ? "Call Runner Alert"
                         : "Print Kitchen Slip",
-                    onClick: () => {
-                      showToast({
-                        type: "info",
-                        title: "Thermal Printer Slip Dispatched",
-                        message: `Kitchen chit printed for ${ticket.ticketNumber} (Room ${ticket.roomNumber})`,
-                      });
+                    onClick: async () => {
+                      if (ticket.status === "pending") {
+                        await rejectOrHoldTicket(ticket.id, "Station Chef placed on hold (Kitchen load / 86 item)");
+                      } else if (ticket.status === "preparing") {
+                        showToast({
+                          type: "warning",
+                          title: "Expediter & Runner Paged",
+                          message: `High-priority pickup runner paged to pass-line for ticket ${ticket.ticketNumber} (Room ${ticket.roomNumber}).`,
+                        });
+                      } else {
+                        showToast({
+                          type: "info",
+                          title: "Thermal Printer Slip Dispatched",
+                          message: `Kitchen chit printed for ${ticket.ticketNumber} (Room ${ticket.roomNumber})`,
+                        });
+                      }
                     },
                   }}
                 />

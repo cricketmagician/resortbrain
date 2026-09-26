@@ -52,6 +52,15 @@ interface OpsContextType {
   simulateRaceConditionConflict: boolean;
   setSimulateRaceConditionConflict: (val: boolean) => void;
 
+  // Theme (Dark / Light)
+  theme: "dark" | "light";
+  toggleTheme: () => void;
+
+  // Sharp Hardware Buzzer
+  isBuzzerRinging: boolean;
+  silenceBuzzer: () => void;
+  triggerBuzzerDemo: () => void;
+
   // Core Ops States
   kitchenTickets: KitchenTicket[];
   rooms: RoomRecord[];
@@ -64,9 +73,11 @@ interface OpsContextType {
 
   // Optimistic Mutations
   acceptTicket: (ticketId: string) => Promise<boolean>;
+  rejectOrHoldTicket: (ticketId: string, reason?: string) => Promise<boolean>;
   startPrepTicket: (ticketId: string) => Promise<boolean>;
   readyTicket: (ticketId: string) => Promise<boolean>;
   simulateIncomingOrder: () => void;
+  simulateIncomingServiceRequest: () => void;
 
   updateRoomStatus: (roomId: string, newStatus: RoomRecord["cleanStatus"]) => void;
   acceptServiceRequest: (requestId: string) => void;
@@ -119,6 +130,48 @@ export function OpsProvider({ children }: { children: React.ReactNode }) {
   const [deviceConfig, setDeviceConfig] = useState<DeviceConfig>(INITIAL_DEVICE_CONFIG);
   const [slaAlerts, setSlaAlerts] = useState<SlaEscalationAlert[]>(INITIAL_SLA_ALERTS);
   const [toasts, setToasts] = useState<ToastNotification[]>([]);
+  const [theme, setTheme] = useState<"dark" | "light">("dark");
+  const [isBuzzerRinging, setIsBuzzerRinging] = useState<boolean>(false);
+
+  // Synchronize theme with localStorage and document class
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const saved = localStorage.getItem("resortbrain_theme") as "dark" | "light" | null;
+    const initialTheme = saved === "light" ? "light" : "dark";
+    setTheme(initialTheme);
+    document.documentElement.classList.remove("dark", "light");
+    document.documentElement.classList.add(initialTheme);
+  }, []);
+
+  const toggleTheme = useCallback(() => {
+    setTheme((prev) => {
+      const next = prev === "dark" ? "light" : "dark";
+      if (typeof window !== "undefined") {
+        localStorage.setItem("resortbrain_theme", next);
+        document.documentElement.classList.remove("dark", "light");
+        document.documentElement.classList.add(next);
+      }
+      return next;
+    });
+  }, []);
+
+  // Listen to hardware buzzer state changes
+  useEffect(() => {
+    const unsub = kitchenAudioEngine.subscribeBuzzerState((active) => {
+      setIsBuzzerRinging(active);
+    });
+    return unsub;
+  }, []);
+
+  const silenceBuzzer = useCallback(() => {
+    kitchenAudioEngine.silenceBuzzer();
+    setIsBuzzerRinging(false);
+  }, []);
+
+  const triggerBuzzerDemo = useCallback(() => {
+    kitchenAudioEngine.startBuzzer("manual_sim_test");
+    kitchenAudioEngine.playSharpBuzzerPulse();
+  }, []);
 
   const showToast = useCallback((toast: Omit<ToastNotification, "id">) => {
     const id = `t_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`;
@@ -201,6 +254,9 @@ export function OpsProvider({ children }: { children: React.ReactNode }) {
       const ticket = kitchenTickets.find((t) => t.id === ticketId);
       if (!ticket) return false;
 
+      // Stop buzzer for this ticket immediately upon acceptance
+      kitchenAudioEngine.stopBuzzer(ticketId);
+
       // 1. Optimistic transition
       const previousState = [...kitchenTickets];
       setKitchenTickets((prev) =>
@@ -250,11 +306,59 @@ export function OpsProvider({ children }: { children: React.ReactNode }) {
       showToast({
         type: "success",
         title: "Ticket Accepted",
-        message: `Ticket ${ticket.ticketNumber} assigned to your station.`,
+        message: `Ticket ${ticket.ticketNumber} assigned to your station. Buzzer silenced.`,
       });
       return true;
     },
     [kitchenTickets, currentStaff, simulateRaceConditionConflict, currentHotel.id, showToast]
+  );
+
+  const rejectOrHoldTicket = useCallback(
+    async (ticketId: string, reason?: string): Promise<boolean> => {
+      const ticket = kitchenTickets.find((t) => t.id === ticketId);
+      if (!ticket) return false;
+
+      // Immediately stop the sharp buzzer for this ticket
+      kitchenAudioEngine.stopBuzzer(ticketId);
+
+      setKitchenTickets((prev) =>
+        prev.map((t) =>
+          t.id === ticketId
+            ? { ...t, status: "cancelled", note: `HOLD / REJECTED: ${reason || "Kitchen Station Load"}` }
+            : t
+        )
+      );
+
+      // Record in immutable audit log
+      const newAudit: AuditLogItem = {
+        id: `aud_${Date.now()}`,
+        hotelId: currentHotel.id,
+        timestamp: new Date().toISOString(),
+        actorId: currentStaff.id,
+        actorName: `${currentStaff.name} (${currentStaff.roleTitle})`,
+        eventType: "order.held",
+        entityTarget: `${ticket.ticketNumber} (Room ${ticket.roomNumber})`,
+        ipAddress: "192.241.14.82",
+        traceId: `tr_${Math.random().toString(36).substr(2, 8)}`,
+        payload: {
+          ticketId,
+          room: ticket.roomNumber,
+          action: "hold_or_rejected",
+          reason: reason || "Kitchen station load / 86 ingredient",
+          rejectedBy: currentStaff.name,
+        },
+      };
+      setAuditLogs((prev) => [newAudit, ...prev]);
+
+      showToast({
+        type: "warning",
+        title: "Order Placed on Hold / Rejected",
+        message: `Order ${ticket.ticketNumber} (Room ${ticket.roomNumber}) has been held. Front Desk & runner alerted.`,
+      });
+
+      return true;
+    },
+    [kitchenTickets, currentStaff, currentHotel.id, showToast]
   );
 
   const startPrepTicket = useCallback(
@@ -323,6 +427,8 @@ export function OpsProvider({ children }: { children: React.ReactNode }) {
 
     setKitchenTickets((prev) => [newTicket, ...prev]);
     kitchenAudioEngine.playOrderChime();
+    // Start continuous sharp buzzer until accepted
+    kitchenAudioEngine.startBuzzer(newTicket.id);
 
     // Audit log
     const newAudit: AuditLogItem = {
@@ -340,9 +446,42 @@ export function OpsProvider({ children }: { children: React.ReactNode }) {
     setAuditLogs((prev) => [newAudit, ...prev]);
 
     showToast({
-      type: "success",
+      type: "warning",
       title: "Realtime: New Kitchen Ticket",
-      message: `${newNumber} received for Room ${randomRoom}. Hardware chime triggered!`,
+      message: `${newNumber} received for Room ${randomRoom}. Sharp buzzer active until accepted!`,
+    });
+  }, [currentHotel.id, showToast]);
+
+  // Simulate incoming real-time housekeeping service request
+  const simulateIncomingServiceRequest = useCallback(() => {
+    const randomRooms = ["102", "204", "305", "412", "501"];
+    const randomRoom = randomRooms[Math.floor(Math.random() * randomRooms.length)];
+    const services = [
+      { title: "Extra Feather Pillows & Fresh Linens", category: "amenity" as const },
+      { title: "Urgent Turndown Service & Towels", category: "cleaning" as const },
+      { title: "Mini-bar Restock & Ice Bucket", category: "maintenance" as const },
+      { title: "Child Cot & Baby Amenity Kit", category: "amenity" as const },
+    ];
+    const chosen = services[Math.floor(Math.random() * services.length)];
+    const newReq: ServiceRequest = {
+      id: `req_${Date.now()}`,
+      hotelId: currentHotel.id,
+      roomNumber: randomRoom,
+      title: chosen.title,
+      category: chosen.category,
+      placedAt: new Date().toISOString(),
+      dueAt: new Date(Date.now() + 20 * 60 * 1000).toISOString(),
+      status: "created",
+    };
+
+    setServiceRequests((prev) => [newReq, ...prev]);
+    // Start continuous sharp buzzer until accepted
+    kitchenAudioEngine.startBuzzer(newReq.id);
+
+    showToast({
+      type: "warning",
+      title: "Urgent Housekeeping Dispatch",
+      message: `Room ${randomRoom}: ${chosen.title}. Sharp buzzer active until accepted!`,
     });
   }, [currentHotel.id, showToast]);
 
@@ -366,6 +505,9 @@ export function OpsProvider({ children }: { children: React.ReactNode }) {
 
   const acceptServiceRequest = useCallback(
     (requestId: string) => {
+      // Immediately stop buzzer for this request
+      kitchenAudioEngine.stopBuzzer(requestId);
+
       setServiceRequests((prev) =>
         prev.map((req) =>
           req.id === requestId
@@ -376,7 +518,7 @@ export function OpsProvider({ children }: { children: React.ReactNode }) {
       showToast({
         type: "success",
         title: "Dispatch Accepted",
-        message: `Assigned to ${currentStaff.name}. Guest timeline updated.`,
+        message: `Assigned to ${currentStaff.name}. Buzzer silenced.`,
       });
     },
     [currentStaff.name, showToast]
@@ -568,6 +710,11 @@ export function OpsProvider({ children }: { children: React.ReactNode }) {
         toggleOffline,
         simulateRaceConditionConflict,
         setSimulateRaceConditionConflict,
+        theme,
+        toggleTheme,
+        isBuzzerRinging,
+        silenceBuzzer,
+        triggerBuzzerDemo,
         kitchenTickets,
         rooms,
         serviceRequests,
@@ -577,9 +724,11 @@ export function OpsProvider({ children }: { children: React.ReactNode }) {
         deviceConfig,
         slaAlerts,
         acceptTicket,
+        rejectOrHoldTicket,
         startPrepTicket,
         readyTicket,
         simulateIncomingOrder,
+        simulateIncomingServiceRequest,
         updateRoomStatus,
         acceptServiceRequest,
         completeServiceRequest,

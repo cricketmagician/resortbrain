@@ -15,6 +15,10 @@ import {
   ChevronDown,
   Layers,
   Sparkles,
+  Sun,
+  Moon,
+  BellRing,
+  BellOff,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -32,6 +36,11 @@ export function DemoControlBar() {
     simulateRaceConditionConflict,
     setSimulateRaceConditionConflict,
     simulateIncomingOrder,
+    theme,
+    toggleTheme,
+    isBuzzerRinging,
+    silenceBuzzer,
+    triggerBuzzerDemo,
     latencyMs,
   } = useOps();
 
@@ -169,6 +178,53 @@ export function DemoControlBar() {
                 <WifiOff className="w-4 h-4" />
               ) : (
                 <Wifi className="w-4 h-4" />
+              )}
+            </button>
+
+            {/* Hardware Buzzer Manual Trigger / Silence */}
+            <button
+              onClick={isBuzzerRinging ? silenceBuzzer : triggerBuzzerDemo}
+              className={cn(
+                "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-all cursor-pointer",
+                isBuzzerRinging
+                  ? "bg-amber-500/25 border-amber-500 text-amber-200 animate-pulse"
+                  : "bg-slate-900 text-slate-300 border-slate-700 hover:border-slate-600"
+              )}
+              title={
+                isBuzzerRinging
+                  ? "Buzzer active! Click to silence"
+                  : "Click to test sharp hardware buzzer alarm"
+              }
+            >
+              {isBuzzerRinging ? (
+                <>
+                  <BellOff className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Silence Buzzer</span>
+                </>
+              ) : (
+                <>
+                  <BellRing className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Test Buzzer</span>
+                </>
+              )}
+            </button>
+
+            {/* Global Theme Toggle */}
+            <button
+              onClick={toggleTheme}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-900 border border-slate-700 hover:border-slate-500 text-slate-200 transition-colors cursor-pointer"
+              title="Toggle Light / Dark mode"
+            >
+              {theme === "light" ? (
+                <>
+                  <Sun className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Light Mode</span>
+                </>
+              ) : (
+                <>
+                  <Moon className="w-3.5 h-3.5 text-indigo-400" />
+                  <span>Dark Mode</span>
+                </>
               )}
             </button>
           </div>

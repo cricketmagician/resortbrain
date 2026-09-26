@@ -24,13 +24,15 @@ export function formatPaiseToINR(paise: number): string {
  * Formats ISO UTC timestamp into localized operational display
  */
 export function formatOpsTime(isoString: string | Date): string {
+  if (!isoString) return "";
   const date = typeof isoString === "string" ? new Date(isoString) : isoString;
-  return date.toLocaleTimeString("en-US", {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: true,
-  });
+  if (isNaN(date.getTime())) return "";
+  const h = date.getHours();
+  const m = date.getMinutes().toString().padStart(2, "0");
+  const s = date.getSeconds().toString().padStart(2, "0");
+  const ampm = h >= 12 ? "PM" : "AM";
+  const hour12 = (h % 12 || 12).toString().padStart(2, "0");
+  return `${hour12}:${m}:${s} ${ampm}`;
 }
 
 export function formatOpsDate(isoString: string | Date): string {

@@ -37,16 +37,14 @@ export default function StaffLayout({
     isSoundMuted,
     toggleSound,
     slaAlerts,
+    theme,
+    toggleTheme,
+    isBuzzerRinging,
+    silenceBuzzer,
   } = useOps();
 
   const [isPinModalOpen, setIsPinModalOpen] = useState(false);
-  const [isLightMode, setIsLightMode] = useState(false);
-
-  const toggleTheme = () => {
-    setIsLightMode(!isLightMode);
-    document.documentElement.classList.toggle("dark");
-    document.documentElement.classList.toggle("light");
-  };
+  const isLightMode = theme === "light";
 
   const navItems = [
     {
@@ -136,6 +134,18 @@ export default function StaffLayout({
                 <Volume2 className="w-4 h-4 text-emerald-400" />
               )}
             </button>
+
+            {/* Active Buzzer Indicator */}
+            {isBuzzerRinging && (
+              <button
+                onClick={silenceBuzzer}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-500/20 border border-amber-500 text-amber-300 text-xs font-semibold animate-pulse hover:bg-amber-500/30 transition-colors cursor-pointer"
+                title="Sharp buzzer active for unaccepted requests. Click to silence."
+              >
+                <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+                <span className="font-mono text-[11px]">BUZZER ON</span>
+              </button>
+            )}
 
             {/* Theme Toggle */}
             <button
