@@ -81,6 +81,7 @@ describe('Member 2 Contract Enhancements & Dynamic Billing', () => {
       check_out: new Date(Date.now() + 86400000).toISOString(),
       status: 'active' as const,
       stay_token: `token_${freshStayId}`,
+      checkin_pin: '1234',
     };
     db.stays.push(stay);
 
@@ -115,6 +116,7 @@ describe('Member 2 Contract Enhancements & Dynamic Billing', () => {
       check_out: new Date(Date.now() + 86400000).toISOString(),
       status: 'active' as const,
       stay_token: `token_${stayId}`,
+      checkin_pin: '1234',
     });
 
     const item = db.menuItems.find((m) => m.hotel_id === testHotel.id)!;

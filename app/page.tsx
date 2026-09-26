@@ -35,6 +35,8 @@ import {
   Users,
 } from 'lucide-react';
 import { playKitchenChime } from '@/components/sound';
+import { supabase, signInWithGoogle, signOutUser } from '@/lib/supabase';
+import QRCode from 'qrcode';
 
 interface MenuItem {
   id: string;
@@ -111,6 +113,23 @@ interface LoggedInUser {
   hotelName: string;
 }
 
+export interface RoomWithStay {
+  id: string;
+  hotel_id: string;
+  room_number: string;
+  room_type: string;
+  status: 'available' | 'occupied' | 'cleaning' | 'maintenance';
+  qr_code_token: string;
+  activeStay: {
+    id: string;
+    guestName: string;
+    checkinPin: string;
+    checkIn: string;
+    checkOut: string;
+    stayToken: string;
+  } | null;
+}
+
 export default function ResortBrainPlatform() {
   // Theme state
   const [isDark, setIsDark] = useState(true);
@@ -128,6 +147,8 @@ export default function ResortBrainPlatform() {
   // Modals
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  const [googleAuthError, setGoogleAuthError] = useState<string | null>(null);
 
   // Registration Form State
   const [regName, setRegName] = useState('');
@@ -148,6 +169,20 @@ export default function ResortBrainPlatform() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [requests, setRequests] = useState<ServiceRequest[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
+  const [roomsList, setRoomsList] = useState<RoomWithStay[]>([]);
+  const [roomQrUrls, setRoomQrUrls] = useState<Record<string, string>>({});
+
+  // Front Desk Check-In Modal State
+  const [isCheckInModalOpen, setIsCheckInModalOpen] = useState(false);
+  const [selectedRoomForCheckIn, setSelectedRoomForCheckIn] = useState<string>('');
+  const [checkInGuestName, setCheckInGuestName] = useState('');
+  const [checkInPin, setCheckInPin] = useState('4829');
+  const [checkInLoading, setCheckInLoading] = useState(false);
+  const [checkInSuccessMessage, setCheckInSuccessMessage] = useState<string | null>(null);
+
+  // Bedside Standee Modal State
+  const [isStandeeModalOpen, setIsStandeeModalOpen] = useState(false);
+  const [selectedStandeeRoom, setSelectedStandeeRoom] = useState<RoomWithStay | null>(null);
 
   // Guest PWA Preview Cart State
   const [cart, setCart] = useState<Record<string, number>>({});
@@ -211,10 +246,50 @@ export default function ResortBrainPlatform() {
           setHotelsList(data.hotels);
         }
       }
+
+      const roomsRes = await fetch(`/api/rooms?hotelId=${currentHotelId}`);
+      if (roomsRes.ok) {
+        const data = await roomsRes.json();
+        if (data.rooms) {
+          setRoomsList(data.rooms);
+        }
+      }
     } catch (err) {
       console.error('Data refresh error:', err);
     }
   };
+
+  // Generate Real Bedside Scannable QR Codes for each room
+  useEffect(() => {
+    const generateQrs = async () => {
+      if (typeof window === 'undefined' || roomsList.length === 0) return;
+      const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      const origin = isLocal ? `http://192.168.0.126:${window.location.port || '3000'}` : window.location.origin;
+      const urls: Record<string, string> = {};
+
+      const currentHotelSlug = hotelsList.find((h) => h.id === currentHotelId)?.slug || 'grand-azure';
+
+      for (const room of roomsList) {
+        const targetUrl = `${origin}/guest?room=${encodeURIComponent(room.room_number)}&hotel=${currentHotelSlug}&qr=${room.qr_code_token}`;
+        try {
+          const dataUrl = await QRCode.toDataURL(targetUrl, {
+            width: 320,
+            margin: 1,
+            color: {
+              dark: '#0f172a',
+              light: '#ffffff',
+            },
+          });
+          urls[room.id] = dataUrl;
+        } catch (err) {
+          console.error('Error generating QR for room:', room.room_number, err);
+        }
+      }
+      setRoomQrUrls(urls);
+    };
+
+    generateQrs();
+  }, [roomsList, currentHotelId, hotelsList]);
 
   useEffect(() => {
     refreshData();
@@ -306,6 +381,131 @@ export default function ResortBrainPlatform() {
 
     setIsLoginModalOpen(false);
     setViewMode('dashboard');
+  };
+
+  // Supabase Google Auth Session Listener
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        const user = session.user;
+        const name = user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0] || 'Google User';
+        setLoggedInUser({
+          name: `${name} (Google)`,
+          email: user.email || '',
+          role: 'hotel_manager',
+          hotelId: currentHotelId,
+          hotelName: hotelsList.find((h) => h.id === currentHotelId)?.name || 'Grand Azure Resort & Spa',
+        });
+      }
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session?.user) {
+        const user = session.user;
+        const name = user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0] || 'Google User';
+        setLoggedInUser({
+          name: `${name} (Google)`,
+          email: user.email || '',
+          role: 'hotel_manager',
+          hotelId: currentHotelId,
+          hotelName: hotelsList.find((h) => h.id === currentHotelId)?.name || 'Grand Azure Resort & Spa',
+        });
+        setViewMode('dashboard');
+        setIsLoginModalOpen(false);
+      } else if (event === 'SIGNED_OUT') {
+        setLoggedInUser(null);
+        setViewMode('landing');
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [currentHotelId, hotelsList]);
+
+  // Google OAuth Login Action
+  const handleGoogleLogin = async () => {
+    try {
+      setIsGoogleLoading(true);
+      setGoogleAuthError(null);
+      await signInWithGoogle();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Google authentication failed';
+      setGoogleAuthError(msg);
+      setIsGoogleLoading(false);
+    }
+  };
+
+  // Sign out user session
+  const handleLogout = async () => {
+    try {
+      await signOutUser();
+    } catch {}
+    setLoggedInUser(null);
+    setViewMode('landing');
+  };
+
+  // Front Desk Check-in Handler
+  const handleCheckInSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedRoomForCheckIn || !checkInGuestName) return;
+
+    setCheckInLoading(true);
+    try {
+      const res = await fetch('/api/stays/checkin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          hotelId: currentHotelId,
+          roomId: selectedRoomForCheckIn,
+          guestName: checkInGuestName,
+          customPin: checkInPin,
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setCheckInSuccessMessage(`Guest Checked In! Bedside PIN: ${data.pin}`);
+        setTimeout(() => {
+          setIsCheckInModalOpen(false);
+          setCheckInSuccessMessage(null);
+          setCheckInGuestName('');
+          setCheckInPin(Math.floor(1000 + Math.random() * 9000).toString());
+        }, 1200);
+        await refreshData();
+      }
+    } catch (err) {
+      console.error('Check in failed:', err);
+    } finally {
+      setCheckInLoading(false);
+    }
+  };
+
+  // Front Desk Check-out Handler
+  const handleCheckOut = async (roomId: string, stayId?: string) => {
+    if (!confirm('Check out this guest and release the room? The bedside PIN will expire immediately.')) {
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/stays/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          hotelId: currentHotelId,
+          roomId,
+          stayId,
+        }),
+      });
+
+      if (res.ok) {
+        await refreshData();
+      }
+    } catch (err) {
+      console.error('Check out failed:', err);
+    }
   };
 
   // Cart operations
@@ -883,11 +1083,11 @@ export default function ResortBrainPlatform() {
               </div>
 
               <button
-                onClick={() => setViewMode('landing')}
-                className="w-full py-2 rounded-xl text-xs font-bold border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 flex items-center justify-center gap-1.5"
+                onClick={handleLogout}
+                className="w-full py-2 rounded-xl text-xs font-bold border border-slate-200 dark:border-slate-700 hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/30 text-slate-700 dark:text-slate-300 flex items-center justify-center gap-1.5 transition-colors"
               >
                 <LogOut className="w-3.5 h-3.5" />
-                <span>Exit to SaaS Site</span>
+                <span>{loggedInUser ? 'Sign Out & Exit' : 'Exit to SaaS Site'}</span>
               </button>
             </div>
           </aside>
@@ -1172,46 +1372,177 @@ export default function ResortBrainPlatform() {
                 <div className="space-y-6">
                   <div className="p-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm flex flex-wrap items-center justify-between gap-4">
                     <div>
-                      <h3 className="font-extrabold text-base">Room Inventory & Guest QR Codes</h3>
-                      <p className="text-xs text-slate-500">
-                        Print bedside QR codes for each villa. Guests scan with iPhone or Android camera to access their stay.
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-extrabold text-base">Bedside QR Standees & Room Inventory</h3>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                          Live Security Enabled
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-500 mt-1 max-w-2xl">
+                        Permanent acrylic bedside QR standees for every room. Each guest check-in dynamically generates a unique 4-digit security PIN to prevent unauthorized orders from past guests.
                       </p>
                     </div>
-                    <button
-                      onClick={() => window.print()}
-                      className="px-4 py-2 rounded-xl text-xs font-bold bg-amber-500 text-slate-950 shadow flex items-center gap-1.5"
-                    >
-                      <Printer className="w-3.5 h-3.5" /> Print All QR Standees
-                    </button>
+                    <div className="flex items-center gap-2.5">
+                      <button
+                        onClick={() => {
+                          const avail = roomsList.find((r) => r.status === 'available');
+                          setSelectedRoomForCheckIn(avail?.id || roomsList[0]?.id || '');
+                          setCheckInPin(Math.floor(1000 + Math.random() * 9000).toString());
+                          setIsCheckInModalOpen(true);
+                        }}
+                        className="px-4 py-2 rounded-xl text-xs font-black bg-gradient-to-r from-amber-500 to-amber-400 text-slate-950 shadow-md hover:brightness-105 transition-all flex items-center gap-1.5"
+                      >
+                        <KeyRound className="w-3.5 h-3.5" /> Check In New Guest
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          setSelectedStandeeRoom(null); // Print all
+                          setIsStandeeModalOpen(true);
+                        }}
+                        className="px-4 py-2 rounded-xl text-xs font-bold border border-slate-300 dark:border-slate-700 hover:border-amber-500 text-slate-800 dark:text-slate-200 shadow-sm flex items-center gap-1.5"
+                      >
+                        <Printer className="w-3.5 h-3.5 text-amber-500" /> Print Bedside Standees
+                      </button>
+                    </div>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                    {[
-                      { room: 'Room 101', type: 'Ocean Villa', qr: `QR_${currentHotel.slug.toUpperCase()}_101` },
-                      { room: 'Room 102', type: 'Royal Suite', qr: `QR_${currentHotel.slug.toUpperCase()}_102` },
-                      { room: 'Room 204', type: 'Garden Villa', qr: `QR_${currentHotel.slug.toUpperCase()}_204` },
-                      { room: 'Room 304', type: 'Deluxe Suite', qr: `QR_${currentHotel.slug.toUpperCase()}_304` },
-                    ].map((rm, idx) => (
-                      <div
-                        key={idx}
-                        className="p-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-center space-y-3 shadow-sm"
-                      >
-                        <div className="w-28 h-28 mx-auto bg-slate-100 dark:bg-slate-800 rounded-xl flex items-center justify-center border-2 border-dashed border-amber-500/50 p-2">
-                          <QrCode className="w-20 h-20 text-slate-800 dark:text-amber-400" />
-                        </div>
-                        <div>
-                          <div className="font-extrabold text-base">{rm.room}</div>
-                          <div className="text-xs text-slate-400">{rm.type}</div>
-                          <div className="font-mono text-[10px] text-amber-500 mt-1">{rm.qr}</div>
-                        </div>
-                        <button
-                          onClick={() => setActiveTab('guest_preview')}
-                          className="w-full py-2 rounded-xl text-xs font-bold border border-slate-200 dark:border-slate-700 hover:border-amber-500 flex items-center justify-center gap-1"
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+                    {roomsList.map((rm) => {
+                      const isOccupied = rm.status === 'occupied' && rm.activeStay;
+                      const qrSrc = roomQrUrls[rm.id];
+
+                      return (
+                        <div
+                          key={rm.id}
+                          className={`p-5 rounded-2xl border transition-all duration-200 flex flex-col justify-between space-y-4 shadow-sm ${
+                            isOccupied
+                              ? 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/90'
+                              : 'border-dashed border-slate-300 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40 opacity-90'
+                          }`}
                         >
-                          <Smartphone className="w-3.5 h-3.5" /> Launch Guest View
-                        </button>
-                      </div>
-                    ))}
+                          <div>
+                            {/* Card Header */}
+                            <div className="flex items-start justify-between gap-2 pb-3 border-b border-slate-100 dark:border-slate-800">
+                              <div>
+                                <h4 className="font-black text-base tracking-tight">{rm.room_number}</h4>
+                                <div className="text-xs text-slate-400">{rm.room_type}</div>
+                              </div>
+                              <span
+                                className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${
+                                  isOccupied
+                                    ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                                    : 'bg-blue-500/15 text-blue-400 border border-blue-500/30'
+                                }`}
+                              >
+                                {isOccupied ? 'Occupied' : 'Vacant'}
+                              </span>
+                            </div>
+
+                            {/* Real Scannable Bedside QR Code */}
+                            <div className="my-3 text-center">
+                              <div className="relative inline-block group">
+                                {qrSrc ? (
+                                  <img
+                                    src={qrSrc}
+                                    alt={`Bedside QR for ${rm.room_number}`}
+                                    className="w-32 h-32 mx-auto rounded-xl p-2 bg-white shadow-md border border-slate-200 dark:border-slate-700 transition-transform group-hover:scale-105"
+                                  />
+                                ) : (
+                                  <div className="w-32 h-32 mx-auto bg-slate-100 dark:bg-slate-800 rounded-xl flex items-center justify-center border border-dashed border-slate-300 dark:border-slate-700">
+                                    <QrCode className="w-14 h-14 text-slate-400 animate-pulse" />
+                                  </div>
+                                )}
+                                <div className="mt-1.5 font-mono text-[10px] text-slate-400 truncate max-w-[180px] mx-auto">
+                                  {rm.qr_code_token}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Guest Info & Dynamic Security PIN */}
+                            {isOccupied && rm.activeStay ? (
+                              <div className="space-y-2 mt-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                                <div className="flex items-center gap-1.5 text-xs text-slate-300">
+                                  <User className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                                  <span className="font-semibold truncate">{rm.activeStay.guestName}</span>
+                                </div>
+
+                                {/* Dynamic 4-digit PIN generated on check-in */}
+                                <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between">
+                                  <div className="flex items-center gap-1.5">
+                                    <KeyRound className="w-3.5 h-3.5 text-amber-500" />
+                                    <span className="text-[11px] font-black uppercase text-amber-500">Check-In PIN:</span>
+                                  </div>
+                                  <span className="font-mono text-sm font-black tracking-widest bg-amber-500 text-slate-950 px-2 py-0.5 rounded shadow-sm">
+                                    {rm.activeStay.checkinPin}
+                                  </span>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="p-3 rounded-xl bg-slate-100 dark:bg-slate-800/60 text-center text-xs text-slate-400">
+                                Room vacant. Check in guest to generate security PIN.
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Action Buttons */}
+                          <div className="space-y-1.5 pt-2 border-t border-slate-100 dark:border-slate-800">
+                            {isOccupied ? (
+                              <>
+                                <div className="grid grid-cols-2 gap-1.5">
+                                  <Link
+                                    href={`/guest?room=${encodeURIComponent(rm.room_number)}&hotel=${currentHotel.slug}`}
+                                    className="py-1.5 px-2 rounded-xl text-xs font-bold border border-slate-300 dark:border-slate-700 hover:border-amber-500 text-center flex items-center justify-center gap-1 transition-all"
+                                  >
+                                    <Smartphone className="w-3 h-3 text-amber-500" />
+                                    <span>Guest View</span>
+                                  </Link>
+                                  <button
+                                    onClick={() => {
+                                      setSelectedStandeeRoom(rm);
+                                      setIsStandeeModalOpen(true);
+                                    }}
+                                    className="py-1.5 px-2 rounded-xl text-xs font-bold border border-slate-300 dark:border-slate-700 hover:border-amber-500 text-center flex items-center justify-center gap-1 transition-all"
+                                  >
+                                    <Printer className="w-3 h-3 text-amber-500" />
+                                    <span>Standee</span>
+                                  </button>
+                                </div>
+                                <button
+                                  onClick={() => handleCheckOut(rm.id, rm.activeStay?.id)}
+                                  className="w-full py-1.5 rounded-xl text-xs font-bold text-red-400 hover:bg-red-500/10 border border-red-500/20 transition-all flex items-center justify-center gap-1"
+                                >
+                                  <LogOut className="w-3 h-3" />
+                                  <span>Check Out & Release PIN</span>
+                                </button>
+                              </>
+                            ) : (
+                              <div className="grid grid-cols-2 gap-1.5">
+                                <button
+                                  onClick={() => {
+                                    setSelectedRoomForCheckIn(rm.id);
+                                    setCheckInPin(Math.floor(1000 + Math.random() * 9000).toString());
+                                    setIsCheckInModalOpen(true);
+                                  }}
+                                  className="py-2 rounded-xl text-xs font-black bg-gradient-to-r from-amber-500 to-amber-400 text-slate-950 shadow hover:brightness-105 transition-all flex items-center justify-center gap-1"
+                                >
+                                  <KeyRound className="w-3.5 h-3.5" /> Check In
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setSelectedStandeeRoom(rm);
+                                    setIsStandeeModalOpen(true);
+                                  }}
+                                  className="py-2 rounded-xl text-xs font-bold border border-slate-300 dark:border-slate-700 hover:border-amber-500 text-center flex items-center justify-center gap-1 transition-all"
+                                >
+                                  <Printer className="w-3.5 h-3.5 text-amber-500" /> Standee
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -1517,11 +1848,37 @@ export default function ResortBrainPlatform() {
               <button onClick={() => setIsLoginModalOpen(false)} className="text-slate-400 hover:text-white">✕</button>
             </div>
 
-            <p className="text-xs text-slate-500">
-              Select a pre-configured role to immediately enter that workspace or test role-based access:
-            </p>
+            {/* Google Authentication Button */}
+            <div className="space-y-3 pt-1">
+              <button
+                type="button"
+                onClick={handleGoogleLogin}
+                disabled={isGoogleLoading}
+                className="w-full flex items-center justify-center gap-3 px-4 py-3.5 rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/80 text-slate-800 dark:text-white font-bold text-sm shadow-sm transition-all hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50"
+              >
+                <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">
+                  <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.8-2.4 3.65v3.03h3.88c2.27-2.09 3.66-5.17 3.66-9.12z" />
+                  <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.03c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.24v3.13C3.26 21.36 7.34 24 12 24z" />
+                  <path fill="#FBBC05" d="M5.28 14.29c-.25-.72-.38-1.49-.38-2.29s.13-1.57.38-2.29V6.58H1.24C.45 8.15 0 9.92 0 12s.45 3.85 1.24 5.42l4.04-3.13z" />
+                  <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.34 0 3.26 2.64 1.24 6.58l4.04 3.13c.95-2.83 3.6-4.96 6.72-4.96z" />
+                </svg>
+                <span>{isGoogleLoading ? 'Connecting to Google...' : 'Continue with Google'}</span>
+              </button>
 
-            <div className="space-y-3 pt-2">
+              {googleAuthError && (
+                <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-xs text-red-400">
+                  {googleAuthError}
+                </div>
+              )}
+
+              <div className="relative flex py-2 items-center">
+                <div className="flex-grow border-t border-slate-200 dark:border-slate-800"></div>
+                <span className="flex-shrink mx-3 text-[11px] font-semibold tracking-wider text-slate-400 uppercase">Or Demo Quick Roles</span>
+                <div className="flex-grow border-t border-slate-200 dark:border-slate-800"></div>
+              </div>
+            </div>
+
+            <div className="space-y-3">
               <button
                 onClick={() => {
                   const leela = hotelsList.find((h) => h.slug === 'the-leela-palace') || hotelsList[0];
@@ -1597,7 +1954,196 @@ export default function ResortBrainPlatform() {
         </div>
       )}
 
-      {/* Cart Drawer */}
+      {/* 3. FRONT DESK GUEST CHECK-IN MODAL */}
+      {isCheckInModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md">
+          <div className="w-full max-w-lg bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 border border-slate-200 dark:border-slate-800 shadow-2xl space-y-5">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-amber-500/10 text-amber-500 border border-amber-500/20">
+                  <KeyRound className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-black text-lg">Front Desk Guest Check-In</h3>
+                  <p className="text-xs text-slate-400">Generate dynamic bedside PIN & activate room QR</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsCheckInModalOpen(false)}
+                className="text-slate-400 hover:text-white"
+              >
+                ✕
+              </button>
+            </div>
+
+            {checkInSuccessMessage ? (
+              <div className="p-5 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-center space-y-2">
+                <CheckCircle2 className="w-8 h-8 mx-auto text-emerald-400" />
+                <div className="font-black text-base">{checkInSuccessMessage}</div>
+                <div className="text-xs text-slate-300">Room is now occupied and Bedside QR is active!</div>
+              </div>
+            ) : (
+              <form onSubmit={handleCheckInSubmit} className="space-y-4">
+                <div>
+                  <label className="text-xs font-bold uppercase text-slate-400">Select Room</label>
+                  <select
+                    value={selectedRoomForCheckIn}
+                    onChange={(e) => setSelectedRoomForCheckIn(e.target.value)}
+                    required
+                    className="w-full mt-1.5 px-3.5 py-3 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-sm font-semibold focus:border-amber-500 outline-none"
+                  >
+                    <option value="" disabled>-- Select a Room --</option>
+                    {roomsList.map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {r.room_number} ({r.room_type}) — {r.status === 'occupied' ? 'Currently Occupied' : 'Vacant'}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold uppercase text-slate-400">Guest Full Name</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Mr. Raghav Singhania"
+                    value={checkInGuestName}
+                    onChange={(e) => setCheckInGuestName(e.target.value)}
+                    className="w-full mt-1.5 px-3.5 py-3 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-sm focus:border-amber-500 outline-none"
+                  />
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold uppercase text-slate-400">Dynamic 4-Digit Stay PIN</label>
+                    <button
+                      type="button"
+                      onClick={() => setCheckInPin(Math.floor(1000 + Math.random() * 9000).toString())}
+                      className="text-xs text-amber-500 hover:text-amber-400 font-bold flex items-center gap-1"
+                    >
+                      <RefreshCw className="w-3 h-3" /> Generate New
+                    </button>
+                  </div>
+                  <div className="mt-1.5 flex gap-2">
+                    <input
+                      type="text"
+                      maxLength={6}
+                      required
+                      value={checkInPin}
+                      onChange={(e) => setCheckInPin(e.target.value)}
+                      className="flex-1 px-4 py-3 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-lg font-mono font-black tracking-widest text-amber-500 focus:border-amber-500 outline-none text-center"
+                    />
+                  </div>
+                  <p className="mt-1 text-[11px] text-slate-500">
+                    Hand this PIN to the guest on their keycard sleeve. They enter this PIN when scanning the bedside QR.
+                  </p>
+                </div>
+
+                <div className="pt-2">
+                  <button
+                    type="submit"
+                    disabled={checkInLoading || !selectedRoomForCheckIn || !checkInGuestName}
+                    className="w-full py-3.5 rounded-xl font-black text-sm bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 text-slate-950 shadow-xl hover:brightness-105 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {checkInLoading ? (
+                      'Activating Room & Stay...'
+                    ) : (
+                      <>
+                        <KeyRound className="w-4 h-4" />
+                        <span>Confirm Check-In & Generate Bedside PIN</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 4. LUXURY BEDSIDE QR STANDEE PREVIEW & PRINT MODAL */}
+      {isStandeeModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md overflow-y-auto">
+          <div className="w-full max-w-2xl bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 border border-slate-200 dark:border-slate-800 shadow-2xl space-y-6 my-8">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
+              <div className="flex items-center gap-2.5">
+                <Printer className="w-5 h-5 text-amber-500" />
+                <h3 className="font-black text-lg">
+                  {selectedStandeeRoom ? `${selectedStandeeRoom.room_number} Bedside Standee` : 'All Bedside QR Standees'}
+                </h3>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => window.print()}
+                  className="px-4 py-2 rounded-xl text-xs font-black bg-amber-500 text-slate-950 shadow hover:brightness-105 flex items-center gap-1.5"
+                >
+                  <Printer className="w-3.5 h-3.5" /> Print Now
+                </button>
+                <button
+                  onClick={() => setIsStandeeModalOpen(false)}
+                  className="text-slate-400 hover:text-white p-1"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            {/* Standee Showcase Cards */}
+            <div className="space-y-6">
+              {(selectedStandeeRoom ? [selectedStandeeRoom] : roomsList).map((rm) => {
+                const qrSrc = roomQrUrls[rm.id];
+                return (
+                  <div
+                    key={rm.id}
+                    className="p-8 rounded-3xl border-2 border-amber-500/40 bg-gradient-to-b from-slate-950 to-slate-900 text-white shadow-2xl text-center space-y-5 max-w-md mx-auto print:border-black print:text-black print:bg-white"
+                  >
+                    <div>
+                      <div className="text-[11px] font-bold tracking-widest text-amber-500 uppercase">
+                        {currentHotel.name}
+                      </div>
+                      <div className="text-2xl font-black mt-1 tracking-tight text-white print:text-black">
+                        {rm.room_number}
+                      </div>
+                      <div className="text-xs text-slate-400">{rm.room_type}</div>
+                    </div>
+
+                    <div className="p-4 bg-white rounded-2xl inline-block shadow-xl border border-slate-200">
+                      {qrSrc ? (
+                        <img
+                          src={qrSrc}
+                          alt={`QR for ${rm.room_number}`}
+                          className="w-48 h-48 mx-auto"
+                        />
+                      ) : (
+                        <QrCode className="w-48 h-48 text-slate-800" />
+                      )}
+                    </div>
+
+                    <div className="space-y-2 text-xs">
+                      <div className="font-extrabold text-amber-400 uppercase tracking-wider text-[11px]">
+                        Scan Bedside QR Code
+                      </div>
+                      <p className="text-slate-300 print:text-slate-700 max-w-xs mx-auto leading-relaxed">
+                        Open your phone camera to access zero-install 24/7 in-room dining, luxury amenities, housekeeping, and live folio settlement.
+                      </p>
+                    </div>
+
+                    <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-bold print:border-slate-300 print:text-black">
+                      🛡️ Enter the 4-digit Stay PIN provided at Front Desk Check-in
+                      {rm.activeStay && (
+                        <div className="mt-1 font-mono text-sm font-black text-amber-300">
+                          Active PIN: {rm.activeStay.checkinPin}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
       {isCartOpen && (
         <div className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-sm">
           <div className="w-full max-w-md h-full bg-white dark:bg-slate-900 p-6 flex flex-col justify-between shadow-2xl border-l border-slate-200 dark:border-slate-800">

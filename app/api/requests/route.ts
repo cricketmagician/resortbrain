@@ -6,6 +6,7 @@ import { CreateRequestInputSchema } from '@/modules/requests/schema';
 import { createServiceRequest } from '@/modules/requests/service';
 import { getGuestRequests, getDepartmentRequests } from '@/modules/requests/queries';
 import { extractStayToken, verifyStayToken } from '@/server/auth';
+import { supabaseServer } from '@/server/supabase';
 
 export async function POST(req: NextRequest) {
   try {
@@ -22,6 +23,23 @@ export async function POST(req: NextRequest) {
     });
 
     const request = await createServiceRequest(validated);
+
+    // Sync to Supabase in background
+    try {
+      const targetHotelId = request.hotel_id === 'hotel-001' ? '11111111-1111-1111-1111-111111111111' : request.hotel_id;
+      supabaseServer.from('service_requests').insert({
+        hotel_id: targetHotelId,
+        stay_id: request.stay_id,
+        room_id: request.room_id || 'a0000101-0000-0000-0000-000000000101',
+        category: request.category,
+        title: request.title,
+        details: request.details,
+        status: request.status,
+        priority: request.priority,
+        sla_minutes: request.sla_minutes,
+      }).then(() => {});
+    } catch {}
+
     return NextResponse.json({ success: true, request }, { status: 201 });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Invalid request payload';
@@ -47,8 +65,26 @@ export async function GET(req: NextRequest) {
     }
 
     if (hotelId) {
+      try {
+        const targetHId = hotelId === 'hotel-001' ? '11111111-1111-1111-1111-111111111111' : hotelId;
+        let query = supabaseServer
+          .from('service_requests')
+          .select('id, hotel_id, stay_id, room_id, category, title, details, status, priority, sla_minutes, created_at')
+          .eq('hotel_id', targetHId)
+          .order('created_at', { ascending: false });
+
+        if (category) {
+          query = query.eq('category', category);
+        }
+
+        const { data: sbRequests, error } = await query;
+        if (!error && sbRequests && sbRequests.length > 0) {
+          return NextResponse.json({ requests: sbRequests, source: 'supabase' });
+        }
+      } catch {}
+
       const requests = await getDepartmentRequests(hotelId, category);
-      return NextResponse.json({ requests });
+      return NextResponse.json({ requests, source: 'local' });
     }
 
     return NextResponse.json({ error: 'Missing stayToken or hotelId.' }, { status: 400 });

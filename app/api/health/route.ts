@@ -24,6 +24,10 @@ export async function GET() {
     pushReadiness: {
       vapidConfigured: !!process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY,
     },
+    supabase: {
+      configured: !!(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY),
+      projectUrl: process.env.NEXT_PUBLIC_SUPABASE_URL || null,
+    },
   };
 
   return NextResponse.json(health, { status: 200 });

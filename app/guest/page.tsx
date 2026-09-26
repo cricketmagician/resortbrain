@@ -82,9 +82,18 @@ export default function GuestPWAView() {
 
   // Hotel & Room Stay Info
   const [hotelTitle, setHotelTitle] = useState('Grand Azure Resort & Spa');
-  const [roomNumber, setRoomNumber] = useState('Room 304');
-  const [guestName, setGuestName] = useState('Dr. Siddharth Verma');
-  const [currentStayToken, setCurrentStayToken] = useState('stay_token_live_demo_room_304');
+  const [roomNumber, setRoomNumber] = useState('Room 101');
+  const [roomType, setRoomType] = useState('Oceanfront Pool Villa');
+  const [guestName, setGuestName] = useState('Valued Guest');
+  const [currentStayToken, setCurrentStayToken] = useState('');
+
+  // Bedside QR & Dynamic Security PIN States
+  const [isVerified, setIsVerified] = useState(false);
+  const [enteredPin, setEnteredPin] = useState('');
+  const [pinError, setPinError] = useState<string | null>(null);
+  const [pinLoading, setPinLoading] = useState(false);
+  const [roomPinHint, setRoomPinHint] = useState('');
+  const [roomsList, setRoomsList] = useState<any[]>([]);
 
   // Menu & Cart
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
@@ -116,45 +125,81 @@ export default function GuestPWAView() {
     }
   }, [isDark]);
 
-  // Fetch dynamic hotels on mount
+  // Load URL parameters (e.g. ?room=Room%20101&hotel=grand-azure&qr=...)
   useEffect(() => {
-    const fetchHotels = async () => {
+    if (typeof window === 'undefined') return;
+    const urlParams = new URLSearchParams(window.location.search);
+    const roomParam = urlParams.get('room');
+    const hotelSlugParam = urlParams.get('hotel');
+    const qrParam = urlParams.get('qr');
+
+    const initStayFromUrl = async () => {
       try {
-        const res = await fetch('/api/hotels');
-        if (res.ok) {
-          const data = await res.json();
-          if (Array.isArray(data.hotels) && data.hotels.length > 0) {
-            setHotels(data.hotels);
-            const found = data.hotels.find((h: HotelOption) => h.id === selectedHotelId) || data.hotels[0];
-            if (found) {
-              setSelectedHotelId(found.id);
-              setHotelTitle(found.name);
-              setRoomNumber(found.activeStay?.roomNumber || 'Room 101');
-              setGuestName(found.activeStay?.guestName || 'Valued Guest');
-              setCurrentStayToken(found.activeStay?.stayToken || `token_${found.slug}_room_101`);
+        const hotelRes = await fetch('/api/hotels');
+        const hotelsData = await hotelRes.json();
+        let targetHotelId = selectedHotelId;
+
+        if (hotelsData.hotels && hotelsData.hotels.length > 0) {
+          setHotels(hotelsData.hotels);
+          if (hotelSlugParam) {
+            const h = hotelsData.hotels.find((item: any) => item.slug === hotelSlugParam || item.id === hotelSlugParam);
+            if (h) targetHotelId = h.id;
+          }
+          setSelectedHotelId(targetHotelId);
+          const hotelObj = hotelsData.hotels.find((h: any) => h.id === targetHotelId);
+          if (hotelObj) setHotelTitle(hotelObj.name);
+        }
+
+        const roomsRes = await fetch(`/api/rooms?hotelId=${targetHotelId}`);
+        const roomsData = await roomsRes.json();
+        if (roomsData.rooms && roomsData.rooms.length > 0) {
+          setRoomsList(roomsData.rooms);
+
+          let targetRoom = null;
+          if (roomParam) {
+            const cleanParam = roomParam.toLowerCase().replace(/^(room|villa|suite)\s*/i, '').trim();
+            targetRoom = roomsData.rooms.find((r: any) => {
+              const rClean = r.room_number.toLowerCase().replace(/^(room|villa|suite)\s*/i, '').trim();
+              return rClean === cleanParam || r.room_number.toLowerCase() === roomParam.toLowerCase();
+            });
+          } else if (qrParam) {
+            targetRoom = roomsData.rooms.find((r: any) => r.qr_code_token === qrParam);
+          }
+
+          if (!targetRoom) {
+            targetRoom = roomsData.rooms[0];
+          }
+
+          if (targetRoom) {
+            setRoomNumber(targetRoom.room_number);
+            setRoomType(targetRoom.room_type);
+            if (targetRoom.activeStay) {
+              setGuestName(targetRoom.activeStay.guestName);
+              setRoomPinHint(targetRoom.activeStay.checkinPin);
+
+              // Check if already authenticated for this room
+              const cached = sessionStorage.getItem(`rb_stay_verified_${targetRoom.id}`);
+              if (cached) {
+                setCurrentStayToken(targetRoom.activeStay.stayToken);
+                setIsVerified(true);
+              }
             }
           }
         }
       } catch (err) {
-        console.error('Failed to load hotels:', err);
+        console.error('Failed to init guest view:', err);
       }
     };
-    fetchHotels();
+
+    initStayFromUrl();
   }, []);
 
-  // Sync when hotel selection changes
+  // Sync menu and orders whenever selectedHotelId or isVerified changes
   useEffect(() => {
-    if (hotels.length > 0) {
-      const found = hotels.find((h) => h.id === selectedHotelId);
-      if (found) {
-        setHotelTitle(found.name);
-        setRoomNumber(found.activeStay?.roomNumber || 'Room 101');
-        setGuestName(found.activeStay?.guestName || 'Valued Guest');
-        setCurrentStayToken(found.activeStay?.stayToken || `token_${found.slug}_room_101`);
-      }
+    if (isVerified) {
+      loadGuestData(selectedHotelId);
     }
-    loadGuestData(selectedHotelId);
-  }, [selectedHotelId, hotels]);
+  }, [selectedHotelId, isVerified]);
 
   // Real-time automatic background polling every 2 seconds
   useEffect(() => {
@@ -196,6 +241,63 @@ export default function GuestPWAView() {
       }
     } catch (err) {
       console.error('Failed to load guest data:', err);
+    }
+  };
+
+  // Bedside Security PIN Verification Handler
+  const handleVerifyPin = async (e?: React.FormEvent, pinOverride?: string) => {
+    if (e) e.preventDefault();
+    const pin = pinOverride || enteredPin;
+    if (!pin || pin.length < 4) {
+      setPinError('Please enter your 4-digit Stay PIN.');
+      return;
+    }
+
+    setPinLoading(true);
+    setPinError(null);
+
+    try {
+      const res = await fetch('/api/stays/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          hotelId: selectedHotelId,
+          roomNumber,
+          pin,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        setPinError(data.error || 'Incorrect 4-digit PIN for this room.');
+        setPinLoading(false);
+        return;
+      }
+
+      if (data.session) {
+        setCurrentStayToken(data.session.stayToken);
+        setGuestName(data.session.guestName);
+        setRoomNumber(data.session.roomNumber);
+        setHotelTitle(data.session.hotelName);
+        setIsVerified(true);
+        if (typeof window !== 'undefined') {
+          sessionStorage.setItem(`rb_stay_verified_${data.session.roomId}`, 'true');
+        }
+        await loadGuestData(data.session.hotelId);
+      }
+    } catch (err: unknown) {
+      setPinError(err instanceof Error ? err.message : 'Error verifying check-in PIN.');
+    } finally {
+      setPinLoading(false);
+    }
+  };
+
+  // Switch or Lock Room
+  const handleLockRoom = () => {
+    setIsVerified(false);
+    setEnteredPin('');
+    if (typeof window !== 'undefined') {
+      sessionStorage.clear();
     }
   };
 
@@ -350,6 +452,20 @@ export default function GuestPWAView() {
     return true;
   });
 
+  const handleSelectRoom = (r: any) => {
+    setRoomNumber(r.room_number);
+    setRoomType(r.room_type || 'Villa');
+    setPinError(null);
+    setEnteredPin('');
+    if (r.activeStay) {
+      setGuestName(r.activeStay.guestName);
+      setRoomPinHint(r.activeStay.checkinPin || '');
+    } else {
+      setGuestName('Vacant Room');
+      setRoomPinHint('');
+    }
+  };
+
   return (
     <div className={`min-h-screen ${isDark ? 'dark bg-[#080d1a] text-slate-100' : 'bg-slate-50 text-slate-900'}`}>
       {/* Top Mobile PWA Header */}
@@ -363,19 +479,32 @@ export default function GuestPWAView() {
             <span className="hidden sm:inline">Back to SaaS Website</span>
           </Link>
 
-          {/* Dynamic Hotel & Room Switcher (Matches /console exactly) */}
+          {/* Dynamic Hotel & Room Switcher */}
           <div className="flex items-center gap-2">
             <select
               value={selectedHotelId}
-              onChange={(e) => setSelectedHotelId(e.target.value)}
-              className="text-xs px-2.5 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-bold focus:ring-1 focus:ring-amber-500 max-w-[220px] truncate"
+              onChange={(e) => {
+                setSelectedHotelId(e.target.value);
+                setIsVerified(false);
+              }}
+              className="text-xs px-2.5 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-bold focus:ring-1 focus:ring-amber-500 max-w-[200px] truncate"
             >
               {hotels.map((h) => (
                 <option key={h.id} value={h.id}>
-                  {h.name} ({h.activeStay?.roomNumber || 'Room 101'})
+                  {h.name}
                 </option>
               ))}
             </select>
+
+            {isVerified && (
+              <button
+                onClick={handleLockRoom}
+                title="Lock Room Concierge"
+                className="px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider bg-rose-500/10 text-rose-500 border border-rose-500/30 hover:bg-rose-500 hover:text-white transition-all"
+              >
+                Lock
+              </button>
+            )}
 
             <button
               onClick={() => setIsDark(!isDark)}
@@ -387,41 +516,169 @@ export default function GuestPWAView() {
         </div>
       </header>
 
-      {/* Main Guest Mobile Container (Max Width 640px for Real Phone Feel) */}
-      <main className="max-w-2xl mx-auto px-4 py-5 space-y-5 pb-24">
-        {/* Luxury Hero Guest Banner */}
-        <div className="relative rounded-3xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-gradient-to-tr from-slate-950 via-slate-900 to-amber-950/40 p-6 text-white shadow-2xl">
-          <div className="relative z-10">
-            <div className="flex items-center justify-between mb-3">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/20 text-amber-400 text-[11px] font-black uppercase tracking-wider border border-amber-500/30">
-                <KeyRound className="w-3.5 h-3.5" /> {roomNumber} • Active Stay
-              </span>
-              <span className="text-[11px] text-slate-400 font-medium">Digital Concierge</span>
+      {/* Conditional: If NOT verified, show Bedside QR Security Verification Gate */}
+      {!isVerified ? (
+        <main className="max-w-md mx-auto px-4 py-10 space-y-6">
+          <div className="text-center space-y-3">
+            <div className="w-16 h-16 rounded-3xl bg-amber-500/10 border border-amber-500/30 text-amber-500 flex items-center justify-center mx-auto shadow-inner shadow-amber-500/20">
+              <KeyRound className="w-8 h-8 animate-pulse" />
             </div>
-
-            <h1 className="text-2xl sm:text-3xl font-black tracking-tight">{hotelTitle}</h1>
-            <p className="text-xs text-slate-300 mt-1">Guest: {guestName}</p>
-
-            {/* Quick Action Buttons */}
-            <div className="mt-5 grid grid-cols-2 gap-2.5">
-              <button
-                onClick={() => setIsRequestModalOpen(true)}
-                className="py-2.5 px-3 rounded-2xl bg-white/10 hover:bg-white/20 border border-white/15 text-xs font-bold text-white flex items-center justify-center gap-2 backdrop-blur-md transition-all shadow"
-              >
-                <ConciergeBell className="w-4 h-4 text-amber-400" />
-                <span>Butler & Amenities</span>
-              </button>
-
-              <button
-                onClick={openFolioModal}
-                className="py-2.5 px-3 rounded-2xl bg-gradient-to-r from-amber-600 to-amber-500 hover:brightness-105 text-xs font-black text-slate-950 flex items-center justify-center gap-2 shadow-lg transition-all"
-              >
-                <Receipt className="w-4 h-4" />
-                <span>View Room Folio</span>
-              </button>
+            <div>
+              <span className="inline-block px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest bg-amber-500/10 text-amber-500 border border-amber-500/20">
+                Bedside QR Security
+              </span>
+              <h1 className="text-2xl font-black tracking-tight mt-2 text-slate-900 dark:text-white">
+                {hotelTitle}
+              </h1>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                Scanned QR on Standee • {roomNumber} ({roomType})
+              </p>
             </div>
           </div>
-        </div>
+
+          {/* Room Selector if user is testing different rooms */}
+          {roomsList.length > 0 && (
+            <div className="p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-1.5">
+              <label className="text-[11px] font-bold text-slate-400 flex items-center justify-between">
+                <span>Select Scanned Room:</span>
+                <span className="text-[10px] text-amber-500 font-semibold">{roomsList.length} Rooms</span>
+              </label>
+              <select
+                value={roomNumber}
+                onChange={(e) => {
+                  const r = roomsList.find((rm: any) => rm.room_number === e.target.value);
+                  if (r) handleSelectRoom(r);
+                }}
+                className="w-full text-xs font-bold px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
+              >
+                {roomsList.map((rm: any) => (
+                  <option key={rm.id} value={rm.room_number}>
+                    {rm.room_number} - {rm.room_type} ({rm.status === 'occupied' ? `Occupied: ${rm.activeStay?.guestName}` : 'Vacant'})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Verification Box */}
+          <div className="p-6 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl space-y-5">
+            <div className="space-y-1">
+              <h2 className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-1.5">
+                <ShieldCheck className="w-4 h-4 text-emerald-500" /> Enter 4-Digit Stay PIN
+              </h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                To prevent unauthorized dining orders and folio charges, please enter your check-in PIN given at the front desk.
+              </p>
+            </div>
+
+            {pinError && (
+              <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-500 text-xs font-semibold text-center">
+                {pinError}
+              </div>
+            )}
+
+            <form onSubmit={(e) => handleVerifyPin(e)} className="space-y-4">
+              <div className="flex justify-center">
+                <input
+                  type="password"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={4}
+                  autoFocus
+                  placeholder="••••"
+                  value={enteredPin}
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/\D/g, '').slice(0, 4);
+                    setEnteredPin(val);
+                    if (val.length === 4) {
+                      handleVerifyPin(undefined, val);
+                    }
+                  }}
+                  className="w-44 text-center tracking-[0.5em] text-2xl font-black py-3 rounded-2xl bg-slate-100 dark:bg-slate-800/80 border-2 border-amber-500/50 focus:border-amber-500 focus:outline-none text-slate-900 dark:text-white shadow-inner"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={pinLoading || enteredPin.length !== 4}
+                className="w-full py-3.5 rounded-2xl font-black text-xs bg-gradient-to-r from-amber-600 to-amber-500 text-slate-950 shadow-lg hover:brightness-105 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
+              >
+                {pinLoading ? 'Verifying Stay...' : 'Unlock In-Room Concierge'}
+              </button>
+            </form>
+
+            {/* Demo Helper Pill */}
+            {roomPinHint ? (
+              <div className="pt-3 border-t border-slate-100 dark:border-slate-800 text-center space-y-2">
+                <p className="text-[11px] text-slate-400">
+                  Guest on file: <strong className="text-slate-200">{guestName}</strong>
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEnteredPin(roomPinHint);
+                    handleVerifyPin(undefined, roomPinHint);
+                  }}
+                  className="w-full py-2 px-3 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-500 text-[11px] font-bold transition-all flex items-center justify-center gap-1.5"
+                >
+                  <span>⚡ 1-Click Demo Fill: Unlock with PIN <strong>{roomPinHint}</strong></span>
+                </button>
+              </div>
+            ) : (
+              <div className="pt-3 border-t border-slate-100 dark:border-slate-800 text-center">
+                <p className="text-[11px] text-amber-500 font-semibold">
+                  ⚠️ This room is currently vacant. Please check in a guest first from the dashboard.
+                </p>
+              </div>
+            )}
+          </div>
+
+          <div className="text-center text-[11px] text-slate-500">
+            Powered by ResortBrain Bedside Token Security • SOC2 & ISO 27001 Compliant
+          </div>
+        </main>
+      ) : (
+        <>
+          {/* Main Guest Mobile Container (Max Width 640px for Real Phone Feel) */}
+          <main className="max-w-2xl mx-auto px-4 py-5 space-y-5 pb-24">
+          {/* Luxury Hero Guest Banner */}
+          <div className="relative rounded-3xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-gradient-to-tr from-slate-950 via-slate-900 to-amber-950/40 p-6 text-white shadow-2xl">
+            <div className="relative z-10">
+              <div className="flex items-center justify-between mb-3">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-400 text-[11px] font-black uppercase tracking-wider border border-emerald-500/30">
+                  <ShieldCheck className="w-3.5 h-3.5" /> {roomNumber} • PIN Verified
+                </span>
+                <button
+                  onClick={handleLockRoom}
+                  className="text-[11px] text-slate-400 hover:text-rose-400 font-medium underline underline-offset-2"
+                >
+                  Exit / Lock
+                </button>
+              </div>
+
+              <h1 className="text-2xl sm:text-3xl font-black tracking-tight">{hotelTitle}</h1>
+              <p className="text-xs text-slate-300 mt-1">Guest: {guestName}</p>
+
+              {/* Quick Action Buttons */}
+              <div className="mt-5 grid grid-cols-2 gap-2.5">
+                <button
+                  onClick={() => setIsRequestModalOpen(true)}
+                  className="py-2.5 px-3 rounded-2xl bg-white/10 hover:bg-white/20 border border-white/15 text-xs font-bold text-white flex items-center justify-center gap-2 backdrop-blur-md transition-all shadow"
+                >
+                  <ConciergeBell className="w-4 h-4 text-amber-400" />
+                  <span>Butler & Amenities</span>
+                </button>
+
+                <button
+                  onClick={openFolioModal}
+                  className="py-2.5 px-3 rounded-2xl bg-gradient-to-r from-amber-600 to-amber-500 hover:brightness-105 text-xs font-black text-slate-950 flex items-center justify-center gap-2 shadow-lg transition-all"
+                >
+                  <Receipt className="w-4 h-4" />
+                  <span>View Room Folio</span>
+                </button>
+              </div>
+            </div>
+          </div>
 
         {/* Live Order Tracker (If Orders Exist) */}
         {activeOrders.length > 0 && (
@@ -823,6 +1080,8 @@ export default function GuestPWAView() {
             </div>
           </div>
         </div>
+      )}
+        </>
       )}
     </div>
   );

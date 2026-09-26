@@ -167,6 +167,193 @@ class ResortBrainDatabase {
     return this.stays.find((s) => s.room_id === room.id && s.status === 'active') || null;
   }
 
+  public getRoomsWithStays(hotelId: string) {
+    const hotelRooms = this.rooms.filter((r) => r.hotel_id === hotelId);
+    return hotelRooms.map((r) => {
+      const activeStay = this.stays.find((s) => s.room_id === r.id && s.status === 'active');
+      return {
+        ...r,
+        activeStay: activeStay
+          ? {
+              id: activeStay.id,
+              guestName: activeStay.guest_name,
+              checkinPin: (activeStay as any).checkin_pin || '1234',
+              checkIn: activeStay.check_in,
+              checkOut: activeStay.check_out,
+              stayToken: activeStay.stay_token,
+            }
+          : null,
+      };
+    });
+  }
+
+  public checkInGuest(params: {
+    hotelId: string;
+    roomId: string;
+    guestName: string;
+    checkOutDate?: string;
+    customPin?: string;
+  }) {
+    const room = this.rooms.find((r) => r.id === params.roomId && r.hotel_id === params.hotelId);
+    if (!room) {
+      throw new Error('Room not found or does not belong to this hotel.');
+    }
+
+    // Mark previous active stays for this room as completed
+    this.stays
+      .filter((s) => s.room_id === room.id && s.status === 'active')
+      .forEach((s) => {
+        (s as any).status = 'completed';
+      });
+
+    const pin = params.customPin || Math.floor(1000 + Math.random() * 9000).toString();
+    const stayId = `stay-${Date.now().toString().slice(-6)}`;
+    const expiresAt = params.checkOutDate || new Date(Date.now() + 86400000 * 2).toISOString();
+    const token = `rb_token_${params.hotelId}_${room.id}_${pin}`;
+
+    const newStay = {
+      id: stayId,
+      hotel_id: room.hotel_id,
+      room_id: room.id,
+      room_number: room.room_number,
+      guest_id: `guest-${Date.now().toString().slice(-4)}`,
+      guest_name: params.guestName,
+      status: 'active' as const,
+      stay_token: token,
+      checkin_pin: pin,
+      check_in: new Date().toISOString(),
+      check_out: expiresAt,
+    };
+
+    this.stays.push(newStay);
+    room.status = 'occupied';
+
+    logAuditEvent({
+      hotel_id: params.hotelId,
+      actor_role: 'front_desk',
+      action: 'GUEST_CHECKED_IN',
+      target_resource: `room:${room.room_number}`,
+      details: {
+        guestName: params.guestName,
+        roomNumber: room.room_number,
+        checkinPin: pin,
+        stayId,
+      },
+    });
+
+    return { stay: newStay, pin };
+  }
+
+  public checkOutGuest(stayIdOrRoomId: string, hotelId: string) {
+    const stay = this.stays.find(
+      (s) =>
+        (s.id === stayIdOrRoomId || s.room_id === stayIdOrRoomId) &&
+        s.hotel_id === hotelId &&
+        s.status === 'active'
+    );
+
+    if (!stay) {
+      throw new Error('Active stay not found.');
+    }
+
+    (stay as any).status = 'completed';
+
+    const room = this.rooms.find((r) => r.id === stay.room_id);
+    if (room) {
+      room.status = 'available';
+    }
+
+    logAuditEvent({
+      hotel_id: hotelId,
+      actor_role: 'front_desk',
+      action: 'GUEST_CHECKED_OUT',
+      target_resource: `stay:${stay.id}`,
+      details: {
+        guestName: stay.guest_name,
+        roomNumber: stay.room_number,
+      },
+    });
+
+    return { success: true };
+  }
+
+  public verifyStayPin(params: {
+    hotelId?: string;
+    qrToken?: string;
+    roomId?: string;
+    roomNumber?: string;
+    pin: string;
+  }) {
+    let room = null;
+    if (params.qrToken) {
+      room = this.rooms.find((r) => r.qr_code_token === params.qrToken);
+    } else if (params.roomId) {
+      room = this.rooms.find((r) => r.id === params.roomId && (!params.hotelId || r.hotel_id === params.hotelId));
+    } else if (params.roomNumber) {
+      const q = params.roomNumber.toLowerCase().replace(/^(room|villa|suite)\s*/i, '').trim();
+      room = this.rooms.find((r) => {
+        const rNum = r.room_number.toLowerCase().replace(/^(room|villa|suite)\s*/i, '').trim();
+        return (rNum === q || r.room_number.toLowerCase() === params.roomNumber?.toLowerCase()) &&
+          (!params.hotelId || r.hotel_id === params.hotelId);
+      });
+    }
+
+    if (!room) {
+      return { success: false, error: 'Room could not be found from bedside QR code.' };
+    }
+
+    const activeStay = this.stays.find((s) => s.room_id === room.id && s.status === 'active');
+    if (!activeStay) {
+      return {
+        success: false,
+        error: `${room.room_number} is currently vacant. Please check in with Front Desk to receive your check-in PIN.`,
+      };
+    }
+
+    const expectedPin = (activeStay as any).checkin_pin;
+    if (expectedPin && expectedPin !== params.pin.trim()) {
+      logAuditEvent({
+        hotel_id: room.hotel_id,
+        actor_role: 'guest',
+        action: 'PIN_VERIFICATION_FAILED',
+        target_resource: `room:${room.room_number}`,
+        details: { attemptedPin: params.pin },
+      });
+      return {
+        success: false,
+        error: `Incorrect 4-digit PIN for ${room.room_number}. Please check your welcome card or Front Desk.`,
+      };
+    }
+
+    const hotel = this.getHotel(room.hotel_id);
+
+    logAuditEvent({
+      hotel_id: room.hotel_id,
+      actor_role: 'guest',
+      action: 'PIN_VERIFICATION_SUCCESS',
+      target_resource: `room:${room.room_number}`,
+      details: { guestName: activeStay.guest_name, roomNumber: room.room_number },
+    });
+
+    return {
+      success: true,
+      session: {
+        stayId: activeStay.id,
+        hotelId: room.hotel_id,
+        hotelSlug: hotel?.slug,
+        hotelName: hotel?.name,
+        roomId: room.id,
+        roomNumber: room.room_number,
+        roomType: room.room_type,
+        guestName: activeStay.guest_name,
+        stayToken: activeStay.stay_token,
+        currency: hotel?.currency || 'INR',
+        taxRate: Number(hotel?.tax_rate_percent || 18),
+        serviceCharge: Number(hotel?.service_charge_percent || 5),
+      },
+    };
+  }
+
   public getOrders(hotelId: string, stayId?: string): Order[] {
     return this.orders.filter((o) => o.hotel_id === hotelId && (!stayId || o.stay_id === stayId));
   }
@@ -280,6 +467,7 @@ class ResortBrainDatabase {
       guest_name: `${params.managerName} (Guest Stay)`,
       status: 'active',
       stay_token: `token_${params.slug}_room_101`,
+      checkin_pin: '1014',
       check_in: new Date().toISOString(),
       check_out: new Date(Date.now() + 86400000 * 3).toISOString(),
     });
