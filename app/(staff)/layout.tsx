@@ -99,7 +99,7 @@ export default function StaffLayout({
               <span className="font-semibold text-slate-200">
                 {currentHotel.name}
               </span>
-              <span className="font-mono text-emerald-400 bg-emerald-950/70 border border-emerald-800/60 px-1.5 py-0.2 rounded text-[11px]">
+              <span className="font-mono text-emerald-300 bg-emerald-500/12 border border-emerald-500/25 px-2 py-0.5 rounded text-[11px]">
                 #{currentHotel.id}
               </span>
             </div>
@@ -114,7 +114,7 @@ export default function StaffLayout({
                   "w-2 h-2 rounded-full",
                   isSimulatedOffline
                     ? "bg-rose-500 animate-ping"
-                    : "bg-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.8)]"
+                    : "bg-emerald-400/90 shadow-[0_0_6px_rgba(52,211,153,0.5)]"
                 )}
               />
               <span className="font-mono text-xs text-slate-300">
@@ -139,10 +139,10 @@ export default function StaffLayout({
             {isBuzzerRinging && (
               <button
                 onClick={silenceBuzzer}
-                className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-500/20 border border-amber-500 text-amber-300 text-xs font-semibold animate-pulse hover:bg-amber-500/30 transition-colors cursor-pointer"
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-500/15 border border-amber-500/40 text-amber-300 text-xs font-medium animate-pulse hover:bg-amber-500/25 transition-colors cursor-pointer"
                 title="Sharp buzzer active for unaccepted requests. Click to silence."
               >
-                <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+                <span className="w-2 h-2 rounded-full bg-amber-400/90 animate-ping" />
                 <span className="font-mono text-[11px]">BUZZER ON</span>
               </button>
             )}
@@ -175,7 +175,7 @@ export default function StaffLayout({
             {/* Switch to Admin Mode */}
             <Link
               href="/manager"
-              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-950/80 hover:bg-indigo-900/80 border border-indigo-700/60 text-indigo-200 text-xs font-semibold transition-colors"
+              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-500/12 hover:bg-indigo-500/20 border border-indigo-500/25 text-indigo-300 text-xs font-semibold transition-colors"
             >
               <Layers className="w-3.5 h-3.5" />
               <span>Admin HQ</span>

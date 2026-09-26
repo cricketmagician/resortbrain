@@ -63,7 +63,7 @@ export function PremiumDialog({
       <div
         ref={dialogRef}
         className={cn(
-          "relative z-10 w-full overflow-hidden rounded-2xl border border-slate-700/80 bg-slate-900/95 p-6 shadow-2xl shadow-black/80 ring-1 ring-white/10 transition-all text-slate-100",
+          "relative z-10 w-full overflow-hidden rounded-2xl border border-white/[0.08] bg-slate-900/95 p-6 shadow-2xl shadow-black/60 ring-1 ring-white/[0.04] transition-all text-slate-100",
           maxWidthClass,
           className
         )}

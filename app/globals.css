@@ -2,25 +2,25 @@
 
 @layer base {
   :root, .dark {
-    /* Aesthetic, Eye-Comfort Obsidian Dark Theme */
-    --background: #0b0f17;       /* Softer warm obsidian canvas, eliminates harsh pitch-black glare */
-    --foreground: #e6edf3;       /* Soft titanium white, eliminates eye-pinching halation */
-    --card: #121824;             /* Refined deep charcoal/slate surface */
-    --card-foreground: #e6edf3;
-    --popover: #121824;
-    --popover-foreground: #e6edf3;
-    --primary: #10b981;          /* Emerald 500 */
-    --primary-foreground: #022c22;
-    --secondary: #171f2e;        /* Subtle secondary tile */
+    /* Eye-Soothing Warm Graphite & Velvet Charcoal Theme */
+    --background: #101319;       /* Warm velvet graphite canvas - zero eye fatigue, no blue glare */
+    --foreground: #e2e8f0;       /* Soft calm ivory - zero halation */
+    --card: #161b24;             /* Elevated matte charcoal surface */
+    --card-foreground: #e2e8f0;
+    --popover: #181e28;
+    --popover-foreground: #e2e8f0;
+    --primary: #10b981;          /* Sage emerald */
+    --primary-foreground: #ffffff;
+    --secondary: #1c2230;        /* Restful secondary tile */
     --secondary-foreground: #cbd5e1;
-    --muted: #171f2e;
-    --muted-foreground: #8b9bb4; /* Gentle silver-slate for metadata */
-    --accent: #1e293b;
-    --accent-foreground: #f8fafc;
-    --destructive: #f43f5e;
+    --muted: #1c2230;
+    --muted-foreground: #8a99ad; /* Balanced slate-gray */
+    --accent: #21293a;
+    --accent-foreground: #f1f5f9;
+    --destructive: #fb7185;
     --destructive-foreground: #ffffff;
-    --border: rgba(255, 255, 255, 0.08); /* Soft subtle borders, no harsh eye-straining grid lines */
-    --input: #0e131d;
+    --border: rgba(255, 255, 255, 0.065); /* Soft, whisper-light dividers */
+    --input: #12161f;
     --ring: #10b981;
     --radius: 0.75rem;
   }
@@ -61,21 +61,28 @@ body {
 }
 
 /* ==========================================================================
-   Aesthetic Dark Mode Enhancements (Gentle on the eyes, rich depth)
+   Eye-Soothing Dark Mode Enhancements (Matte, Restful, Zero Glare)
    ========================================================================== */
+html.dark body {
+  background-color: #101319 !important;
+  color: #e2e8f0 !important;
+  background-image: radial-gradient(ellipse 90% 60% at 50% -10%, rgba(99, 102, 241, 0.035), transparent 70%);
+}
+
+/* Background layers */
 html.dark .bg-slate-950 {
-  background-color: #0b0f17 !important;
+  background-color: #101319 !important;
 }
 
 html.dark .bg-slate-950\/95,
 html.dark .bg-slate-950\/90,
 html.dark .bg-slate-950\/80,
 html.dark .bg-slate-950\/70 {
-  background-color: rgba(11, 15, 23, 0.94) !important;
+  background-color: rgba(16, 19, 25, 0.94) !important;
 }
 
 html.dark .bg-slate-900 {
-  background-color: #121824 !important;
+  background-color: #161b24 !important;
 }
 
 html.dark .bg-slate-900\/95,
@@ -84,32 +91,35 @@ html.dark .bg-slate-900\/80,
 html.dark .bg-slate-900\/70,
 html.dark .bg-slate-900\/60,
 html.dark .bg-slate-900\/40 {
-  background-color: rgba(18, 24, 36, 0.92) !important;
+  background-color: rgba(22, 27, 36, 0.93) !important;
 }
 
 html.dark .bg-slate-800 {
-  background-color: #1a2334 !important;
+  background-color: #1d232f !important;
 }
 
 html.dark .bg-slate-800\/80,
 html.dark .bg-slate-800\/60 {
-  background-color: rgba(26, 35, 52, 0.8) !important;
+  background-color: rgba(29, 35, 47, 0.75) !important;
 }
 
+/* Soft, subtle borders - no distracting cage effect */
 html.dark .border-slate-800,
 html.dark .border-slate-800\/80,
 html.dark .border-slate-800\/60,
 html.dark .border-slate-800\/50 {
-  border-color: rgba(255, 255, 255, 0.08) !important;
+  border-color: rgba(255, 255, 255, 0.065) !important;
 }
 
 html.dark .border-slate-700,
 html.dark .border-slate-700\/60 {
-  border-color: rgba(255, 255, 255, 0.12) !important;
+  border-color: rgba(255, 255, 255, 0.10) !important;
 }
 
+/* Restful Typography Hierarchy */
+html.dark .text-white,
 html.dark .text-slate-100 {
-  color: #e6edf3 !important;
+  color: #e2e8f0 !important;
 }
 
 html.dark .text-slate-200 {
@@ -121,7 +131,147 @@ html.dark .text-slate-300 {
 }
 
 html.dark .text-slate-400 {
-  color: #7b8c9e !important;
+  color: #7b8b9f !important;
+}
+
+html.dark .text-slate-500 {
+  color: #5a687a !important;
+}
+
+/* ==========================================================================
+   Harmonious, Eye-Soothing Translucent Status Chips (No Harsh Neon Blocks)
+   ========================================================================== */
+/* Sage Emerald */
+html.dark .bg-emerald-950,
+html.dark .bg-emerald-950\/80,
+html.dark .bg-emerald-950\/70,
+html.dark .bg-emerald-950\/60,
+html.dark .bg-emerald-950\/40 {
+  background-color: rgba(52, 211, 153, 0.11) !important;
+  color: #34d399 !important;
+}
+html.dark .border-emerald-800,
+html.dark .border-emerald-800\/60,
+html.dark .border-emerald-800\/50 {
+  border-color: rgba(52, 211, 153, 0.22) !important;
+}
+html.dark .text-emerald-400 {
+  color: #34d399 !important;
+}
+
+/* Warm Honey Amber */
+html.dark .bg-amber-950,
+html.dark .bg-amber-950\/80,
+html.dark .bg-amber-950\/70,
+html.dark .bg-amber-950\/60,
+html.dark .bg-amber-950\/40 {
+  background-color: rgba(251, 191, 36, 0.11) !important;
+  color: #fbbf24 !important;
+}
+html.dark .border-amber-800,
+html.dark .border-amber-800\/60,
+html.dark .border-amber-800\/50 {
+  border-color: rgba(251, 191, 36, 0.22) !important;
+}
+html.dark .text-amber-400,
+html.dark .text-amber-300,
+html.dark .text-amber-200 {
+  color: #fbbf24 !important;
+}
+
+/* Soft Coral Rose */
+html.dark .bg-rose-950,
+html.dark .bg-rose-950\/80,
+html.dark .bg-rose-950\/70,
+html.dark .bg-rose-950\/60,
+html.dark .bg-rose-950\/40 {
+  background-color: rgba(251, 113, 133, 0.11) !important;
+  color: #fb7185 !important;
+}
+html.dark .border-rose-800,
+html.dark .border-rose-800\/60,
+html.dark .border-rose-800\/50,
+html.dark .border-rose-500 {
+  border-color: rgba(251, 113, 133, 0.24) !important;
+}
+html.dark .text-rose-400,
+html.dark .text-rose-300,
+html.dark .text-rose-200 {
+  color: #fb7185 !important;
+}
+
+/* Gentle Periwinkle Indigo */
+html.dark .bg-indigo-950,
+html.dark .bg-indigo-950\/80,
+html.dark .bg-indigo-950\/70,
+html.dark .bg-indigo-950\/60,
+html.dark .bg-indigo-950\/40 {
+  background-color: rgba(129, 140, 248, 0.11) !important;
+  color: #818cf8 !important;
+}
+html.dark .border-indigo-800,
+html.dark .border-indigo-800\/60,
+html.dark .border-indigo-700,
+html.dark .border-indigo-700\/60 {
+  border-color: rgba(129, 140, 248, 0.22) !important;
+}
+html.dark .text-indigo-400,
+html.dark .text-indigo-300,
+html.dark .text-indigo-200 {
+  color: #818cf8 !important;
+}
+
+/* Tranquil Teal */
+html.dark .bg-teal-950,
+html.dark .bg-teal-950\/80,
+html.dark .bg-teal-950\/70,
+html.dark .bg-teal-950\/60 {
+  background-color: rgba(45, 212, 191, 0.11) !important;
+  color: #2dd4bf !important;
+}
+html.dark .border-teal-800,
+html.dark .border-teal-700\/60 {
+  border-color: rgba(45, 212, 191, 0.22) !important;
+}
+html.dark .text-teal-400,
+html.dark .text-teal-300 {
+  color: #2dd4bf !important;
+}
+
+/* Form Inputs & Selects in Dark Mode */
+html.dark select,
+html.dark input,
+html.dark textarea {
+  background-color: #12151d !important;
+  color: #e2e8f0 !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+html.dark select option {
+  background-color: #161b24 !important;
+  color: #e2e8f0 !important;
+}
+
+/* Softer Action Buttons (Matte Luxury) */
+html.dark .bg-emerald-600 {
+  background-color: #059669 !important;
+}
+html.dark .bg-emerald-600:hover {
+  background-color: #10b981 !important;
+}
+
+html.dark .bg-indigo-600 {
+  background-color: #4f46e5 !important;
+}
+html.dark .bg-indigo-600:hover {
+  background-color: #6366f1 !important;
+}
+
+html.dark .bg-amber-600 {
+  background-color: #d97706 !important;
+}
+html.dark .bg-amber-600:hover {
+  background-color: #f59e0b !important;
 }
 
 /* ==========================================================================
@@ -134,6 +284,7 @@ html.light {
 html.light body {
   background-color: #f8fafc !important;
   color: #0f172a !important;
+  background-image: none;
 }
 
 html.light .bg-slate-950,
@@ -246,16 +397,16 @@ html.light .bg-teal-950\/60 {
 }
 
 html.dark ::-webkit-scrollbar-track {
-  background: #0b0f17;
+  background: #101319;
 }
 
 html.dark ::-webkit-scrollbar-thumb {
-  background: #232d3f;
+  background: #252d3d;
   border-radius: 9999px;
 }
 
 html.dark ::-webkit-scrollbar-thumb:hover {
-  background: #334155;
+  background: #364156;
 }
 
 html.light ::-webkit-scrollbar-track {

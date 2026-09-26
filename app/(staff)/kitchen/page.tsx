@@ -192,21 +192,21 @@ export default function KitchenKDSPage() {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div className="rounded-xl border border-slate-800 bg-slate-900/80 p-3 flex items-center justify-between">
           <span className="text-xs text-slate-400 font-medium">Pending:</span>
-          <span className="text-lg font-bold font-mono text-amber-400 bg-amber-950/60 px-2 py-0.5 rounded border border-amber-800/50">
+          <span className="text-lg font-bold font-mono text-amber-300 bg-amber-500/12 px-2.5 py-0.5 rounded-lg border border-amber-500/25">
             {pendingCount}
           </span>
         </div>
 
         <div className="rounded-xl border border-slate-800 bg-slate-900/80 p-3 flex items-center justify-between">
           <span className="text-xs text-slate-400 font-medium">Preparing:</span>
-          <span className="text-lg font-bold font-mono text-indigo-400 bg-indigo-950/60 px-2 py-0.5 rounded border border-indigo-800/50">
+          <span className="text-lg font-bold font-mono text-indigo-300 bg-indigo-500/12 px-2.5 py-0.5 rounded-lg border border-indigo-500/25">
             {preparingCount}
           </span>
         </div>
 
         <div className="rounded-xl border border-slate-800 bg-slate-900/80 p-3 flex items-center justify-between">
           <span className="text-xs text-slate-400 font-medium">Ready for Pickup:</span>
-          <span className="text-lg font-bold font-mono text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-800/50">
+          <span className="text-lg font-bold font-mono text-emerald-300 bg-emerald-500/12 px-2.5 py-0.5 rounded-lg border border-emerald-500/25">
             {readyCount}
           </span>
         </div>

@@ -86,15 +86,15 @@ export function QueueListItem({
             </span>
           </div>
 
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1.5">
             {vip && (
-              <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-amber-400 text-black">
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/30">
                 VIP
               </span>
             )}
             {priority && (
-              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-600 text-white">
-                <Flame className="w-3 h-3 mr-0.5" /> RUSH
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-rose-500/15 text-rose-300 border border-rose-500/30">
+                <Flame className="w-3 h-3 mr-0.5 text-rose-400" /> RUSH
               </span>
             )}
           </div>
@@ -156,8 +156,8 @@ export function QueueListItem({
 
         {/* Special Instructions Note */}
         {note && (
-          <div className="mt-2 rounded-lg bg-amber-950/40 border border-amber-800/50 p-2 text-xs text-amber-200 font-medium">
-            <span className="font-bold text-amber-300">Note: </span>
+          <div className="mt-2 rounded-lg bg-amber-500/10 border border-amber-500/20 p-2.5 text-xs text-amber-200/90 font-medium">
+            <span className="font-semibold text-amber-300">Note: </span>
             {note}
           </div>
         )}

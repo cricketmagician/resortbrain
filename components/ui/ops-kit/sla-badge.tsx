@@ -53,16 +53,16 @@ export function SlaBadge({
     return (
       <span
         className={cn(
-          "relative inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-950 text-rose-200 border border-rose-500/80 shadow-[0_0_12px_rgba(244,63,94,0.35)]",
+          "relative inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-rose-500/12 text-rose-300 border border-rose-500/25",
           className
         )}
       >
         <span className="relative flex h-2 w-2">
-          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
-          <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500"></span>
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-60"></span>
+          <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-400"></span>
         </span>
         <Flame className="w-3 h-3 text-rose-400" />
-        <span>SLA BREACHED ({overdueMins}m ago)</span>
+        <span>SLA OVERDUE ({overdueMins}m)</span>
       </span>
     );
   }
@@ -72,7 +72,7 @@ export function SlaBadge({
     return (
       <span
         className={cn(
-          "inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-950/80 text-amber-200 border border-amber-500/60 animate-pulse",
+          "inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-500/12 text-amber-300 border border-amber-500/25 animate-pulse",
           className
         )}
       >
@@ -86,7 +86,7 @@ export function SlaBadge({
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-950/60 text-emerald-300 border border-emerald-600/40",
+        "inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-300 border border-emerald-500/20",
         className
       )}
     >

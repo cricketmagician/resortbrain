@@ -169,18 +169,18 @@ export default function HousekeepingPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {filteredRooms.map((room) => {
             const cleanBadge = {
-              CLEAN: "bg-emerald-950 text-emerald-300 border-emerald-800",
-              CLEANING: "bg-indigo-950 text-indigo-300 border-indigo-800 animate-pulse",
-              DIRTY: "bg-amber-950 text-amber-300 border-amber-800",
-              INSPECTED: "bg-teal-950 text-teal-300 border-teal-800",
-              OOO: "bg-rose-950 text-rose-300 border-rose-800",
+              CLEAN: "bg-emerald-500/12 text-emerald-300 border border-emerald-500/25",
+              CLEANING: "bg-indigo-500/12 text-indigo-300 border border-indigo-500/25 animate-pulse",
+              DIRTY: "bg-amber-500/12 text-amber-300 border border-amber-500/25",
+              INSPECTED: "bg-teal-500/12 text-teal-300 border border-teal-500/25",
+              OOO: "bg-rose-500/12 text-rose-300 border border-rose-500/25",
             }[room.cleanStatus] || "bg-slate-800 text-slate-300";
 
             const occBadge = {
-              OCC: "bg-slate-800 text-slate-200",
-              VAC: "bg-slate-900 text-emerald-400 border border-emerald-800/40",
-              DEP: "bg-amber-950 text-amber-300 border border-amber-800",
-              MAINT: "bg-rose-950 text-rose-300 border border-rose-800",
+              OCC: "bg-slate-800 text-slate-200 border border-slate-700/50",
+              VAC: "bg-emerald-500/12 text-emerald-300 border border-emerald-500/25",
+              DEP: "bg-amber-500/12 text-amber-300 border border-amber-500/25",
+              MAINT: "bg-rose-500/12 text-rose-300 border border-rose-500/25",
             }[room.occupancyStatus];
 
             return (

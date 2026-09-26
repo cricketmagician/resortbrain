@@ -80,10 +80,10 @@ export default function AdminLayout({
             <span className="text-slate-700 hidden sm:inline">|</span>
 
             {/* Tenant Gating Badge */}
-            <div className="hidden md:flex items-center gap-2 bg-indigo-950/60 border border-indigo-800/60 px-2.5 py-1 rounded-full text-xs">
+            <div className="hidden md:flex items-center gap-2 bg-indigo-500/12 border border-indigo-500/25 px-2.5 py-1 rounded-full text-xs">
               <ShieldCheck className="w-3.5 h-3.5 text-indigo-400" />
               <span className="text-slate-300">Tenant Isolation:</span>
-              <span className="font-mono text-indigo-300 font-bold">
+              <span className="font-mono text-indigo-300 font-semibold">
                 ENFORCED (RLS)
               </span>
             </div>
@@ -145,8 +145,8 @@ export default function AdminLayout({
                     className={cn(
                       "flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold transition-all select-none whitespace-nowrap",
                       isActive
-                        ? "bg-indigo-950 text-indigo-300 border border-indigo-700/60 shadow-inner"
-                        : "text-slate-400 hover:text-slate-100 hover:bg-slate-800/60"
+                        ? "bg-indigo-500/15 text-indigo-300 border border-indigo-500/30"
+                        : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/40"
                     )}
                   >
                     <Icon className="w-4 h-4" />

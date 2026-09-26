@@ -112,11 +112,11 @@ export default function OperationsPortalHomePage() {
 
         <div className="max-w-6xl mx-auto space-y-6 text-center sm:text-left">
           <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2.5">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-emerald-950 text-emerald-300 border border-emerald-800 shadow-inner">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider bg-emerald-500/10 text-emerald-300 border border-emerald-500/25">
               <Award className="w-3.5 h-3.5" />
               Member 3: Equal Co-Lead • Operations &amp; Control
             </span>
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-mono bg-slate-900 text-slate-400 border border-slate-800">
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-mono bg-slate-900/90 text-slate-400 border border-slate-800">
               <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
               Zero-Trust Multi-Tenant RLS
             </span>
@@ -135,14 +135,14 @@ export default function OperationsPortalHomePage() {
             <div className="flex flex-wrap items-center justify-center sm:justify-start gap-3">
               <Link
                 href="/kitchen"
-                className="px-6 py-3 rounded-xl font-bold text-sm bg-emerald-500 hover:bg-emerald-400 text-black shadow-xl shadow-emerald-950/60 flex items-center gap-2 active:scale-95 transition-all"
+                className="px-6 py-3 rounded-xl font-semibold text-sm bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-950/30 flex items-center gap-2 active:scale-95 transition-all"
               >
                 <span>Open Kitchen Display (KDS)</span>
                 <ArrowRight className="w-4 h-4" />
               </Link>
               <Link
                 href="/pricing"
-                className="px-5 py-3 rounded-xl font-semibold text-sm bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-800 transition-colors"
+                className="px-5 py-3 rounded-xl font-medium text-sm bg-slate-900/80 hover:bg-slate-800 text-slate-200 border border-slate-700/60 transition-colors"
               >
                 View Pricing Page
               </Link>
