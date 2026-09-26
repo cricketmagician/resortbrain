@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="ResortBrain">
+  <rect width="64" height="64" rx="14" fill="#070b14" />
+  <circle cx="32" cy="32" r="21" fill="none" stroke="#f2bd5c" stroke-width="2.5" />
+  <text x="32" y="40" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="21" fill="#f2bd5c">RB</text>
+</svg>
