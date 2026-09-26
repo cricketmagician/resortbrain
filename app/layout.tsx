@@ -3,7 +3,6 @@ import { Inter, Playfair_Display } from "next/font/google";
 import "./globals.css";
 import { OpsProvider } from "@/lib/ops-store";
 import { ToastContainer } from "@/components/staff/toast-container";
-import { DemoControlBar } from "@/components/staff/demo-control-bar";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -60,7 +59,6 @@ export default function RootLayout({
         <OpsProvider>
           {children}
           <ToastContainer />
-          <DemoControlBar />
         </OpsProvider>
       </body>
     </html>

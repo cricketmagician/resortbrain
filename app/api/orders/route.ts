@@ -83,7 +83,19 @@ export async function GET(req: NextRequest) {
           .order('created_at', { ascending: false });
 
         if (!error && sbOrders && sbOrders.length > 0) {
-          return NextResponse.json({ orders: sbOrders, source: 'supabase' });
+          const { data: sbRooms } = await supabaseServer
+            .from('rooms')
+            .select('id, room_number')
+            .eq('hotel_id', targetHId);
+
+          const roomMap = new Map((sbRooms || []).map((r: any) => [r.id, r.room_number]));
+
+          const enriched = sbOrders.map((o: any) => ({
+            ...o,
+            room_number: roomMap.get(o.room_id) || (o.room_id ? 'Room 304' : 'Suite 304'),
+          }));
+
+          return NextResponse.json({ orders: enriched, source: 'supabase' });
         }
       } catch {}
 
