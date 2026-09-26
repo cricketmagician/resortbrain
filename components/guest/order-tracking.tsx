@@ -1,11 +1,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { CheckCircle2 } from 'lucide-react';
 import { Card } from '@/components/ui/guest-kit/card';
 import { Button } from '@/components/ui/guest-kit/button';
 import { SkeletonCard, SkeletonRegion, SkeletonTimeline, Skeleton } from '@/components/ui/guest-kit/skeleton';
 import { StatusTimeline } from '@/components/ui/guest-kit/status-timeline';
+import { AnimatedCheck } from './animated-check';
 import { LiveIndicator } from './live-indicator';
 import { DelayNotice } from './delay-notice';
 import { EmptyHint } from './empty-hint';
@@ -39,7 +39,7 @@ function PlacedBanner() {
   if (!visible) return null;
   return (
     <div role="status" className="animate-rise flex items-center gap-2 rounded-lg border border-success/30 bg-success-soft px-4 py-3 text-sm text-success">
-      <CheckCircle2 aria-hidden className="size-4 shrink-0" strokeWidth={1.75} />
+      <AnimatedCheck ring={false} className="size-4 shrink-0" />
       {GUEST_COPY.tracking.placedBanner}
     </div>
   );
