@@ -144,6 +144,8 @@ export default function GuestPWAView() {
           if (hotelSlugParam) {
             const h = hotelsData.hotels.find((item: any) => item.slug === hotelSlugParam || item.id === hotelSlugParam);
             if (h) targetHotelId = h.id;
+          } else {
+            targetHotelId = hotelsData.hotels[0].id;
           }
           setSelectedHotelId(targetHotelId);
           const hotelObj = hotelsData.hotels.find((h: any) => h.id === targetHotelId);
@@ -257,11 +259,13 @@ export default function GuestPWAView() {
     setPinError(null);
 
     try {
+      const currentRoom = roomsList.find((r) => r.room_number === roomNumber);
       const res = await fetch('/api/stays/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           hotelId: selectedHotelId,
+          roomId: currentRoom?.id,
           roomNumber,
           pin,
         }),
@@ -279,6 +283,7 @@ export default function GuestPWAView() {
         setGuestName(data.session.guestName);
         setRoomNumber(data.session.roomNumber);
         setHotelTitle(data.session.hotelName);
+        setSelectedHotelId(data.session.hotelId);
         setIsVerified(true);
         if (typeof window !== 'undefined') {
           sessionStorage.setItem(`rb_stay_verified_${data.session.roomId}`, 'true');
@@ -457,6 +462,11 @@ export default function GuestPWAView() {
     setRoomType(r.room_type || 'Villa');
     setPinError(null);
     setEnteredPin('');
+    if (r.hotel_id) {
+      setSelectedHotelId(r.hotel_id);
+      const h = hotels.find((item) => item.id === r.hotel_id);
+      if (h) setHotelTitle(h.name);
+    }
     if (r.activeStay) {
       setGuestName(r.activeStay.guestName);
       setRoomPinHint(r.activeStay.checkinPin || '');
@@ -483,9 +493,22 @@ export default function GuestPWAView() {
           <div className="flex items-center gap-2">
             <select
               value={selectedHotelId}
-              onChange={(e) => {
-                setSelectedHotelId(e.target.value);
+              onChange={async (e) => {
+                const newHotelId = e.target.value;
+                setSelectedHotelId(newHotelId);
                 setIsVerified(false);
+                setPinError(null);
+                setEnteredPin('');
+                const h = hotels.find((item) => item.id === newHotelId);
+                if (h) setHotelTitle(h.name);
+                try {
+                  const res = await fetch(`/api/rooms?hotelId=${newHotelId}`);
+                  const data = await res.json();
+                  if (data.rooms && data.rooms.length > 0) {
+                    setRoomsList(data.rooms);
+                    handleSelectRoom(data.rooms[0]);
+                  }
+                } catch {}
               }}
               className="text-xs px-2.5 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-bold focus:ring-1 focus:ring-amber-500 max-w-[200px] truncate"
             >

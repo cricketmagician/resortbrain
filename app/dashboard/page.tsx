@@ -339,39 +339,30 @@ export default function DashboardPage() {
     }
   };
 
-  // Simulate Order
+  // Simulate Order (Creates live persistent order & triggers kitchen chime)
   const handleSimulateOrder = async () => {
-    if (!isSoundMuted) playKitchenChime();
-    const availableRooms = roomsList.filter((r) => r.activeStay);
-    const targetRoom = availableRooms.length > 0 ? availableRooms[0] : roomsList[0];
-    const roomNumber = targetRoom ? targetRoom.room_number : 'Suite 304';
+    try {
+      if (!isSoundMuted) playKitchenChime();
+      const availableRooms = roomsList.filter((r) => r.activeStay);
+      const targetRoom = availableRooms.length > 0 ? availableRooms[0] : roomsList[0];
+      const roomNum = targetRoom ? targetRoom.room_number : 'Room 101';
 
-    const sampleOrders = [
-      { name: 'Truffle Tagliolini with Parmigiano Reggiano', qty: 2, price: 165000 },
-      { name: 'Pan-Seared Chilean Sea Bass', qty: 1, price: 245000 },
-      { name: 'Sparkling Mineral Water (San Pellegrino 750ml)', qty: 2, price: 45000 },
-    ];
+      const res = await fetch('/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          simulate: true,
+          hotelId: currentHotelId,
+          roomNumber: roomNum,
+        }),
+      });
 
-    const newOrder: Order = {
-      id: `ord_${Date.now()}`,
-      order_number: `ORD-${Math.floor(1000 + Math.random() * 9000)}`,
-      status: 'pending',
-      room_number: roomNumber,
-      items: sampleOrders.map((item) => ({
-        itemName: item.name,
-        quantity: item.qty,
-        unitPricePaise: item.price,
-        totalPricePaise: item.qty * item.price,
-      })),
-      subtotal_paise: 455000,
-      tax_paise: 22750,
-      service_charge_paise: 45500,
-      total_paise: 523250,
-      special_instructions: 'VIP Guest. Please serve immediately with chilled glasses.',
-      created_at: new Date().toISOString(),
-    };
-
-    setOrders((prev) => [newOrder, ...prev]);
+      if (res.ok) {
+        await refreshData();
+      }
+    } catch (err) {
+      console.error('Error simulating ticket:', err);
+    }
   };
 
   // Filtered rooms

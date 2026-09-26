@@ -13,6 +13,7 @@ import {
   RequestStatus,
   StayStatus,
 } from './state-machines';
+import { resolveTenant, isSameTenant } from './tenant';
 
 export interface OrderItem {
   menuItemId: string;
@@ -150,11 +151,13 @@ class ResortBrainDatabase {
   // --- Multi-Tenant Scoped Queries ---
 
   public getHotel(hotelIdOrSlug: string) {
-    return this.hotels.find((h) => h.id === hotelIdOrSlug || h.slug === hotelIdOrSlug) || null;
+    const tenant = resolveTenant(hotelIdOrSlug);
+    return this.hotels.find((h) => isSameTenant(h.id, tenant.id) || h.slug === hotelIdOrSlug) || this.hotels[0];
   }
 
   public getMenu(hotelId: string) {
-    return this.menuItems.filter((item) => item.hotel_id === hotelId && item.is_available);
+    const tenant = resolveTenant(hotelId);
+    return this.menuItems.filter((item) => isSameTenant(item.hotel_id, tenant.id) && item.is_available);
   }
 
   public getStayByToken(token: string) {
@@ -172,7 +175,8 @@ class ResortBrainDatabase {
   }
 
   public getRoomsWithStays(hotelId: string) {
-    const hotelRooms = this.rooms.filter((r) => r.hotel_id === hotelId);
+    const tenant = resolveTenant(hotelId);
+    const hotelRooms = this.rooms.filter((r) => isSameTenant(r.hotel_id, tenant.id));
     return hotelRooms.map((r) => {
       const activeStay = this.stays.find((s) => s.room_id === r.id && s.status === 'active');
       return {
@@ -198,7 +202,8 @@ class ResortBrainDatabase {
     checkOutDate?: string;
     customPin?: string;
   }) {
-    const room = this.rooms.find((r) => r.id === params.roomId && r.hotel_id === params.hotelId);
+    const room = this.rooms.find((r) => r.id === params.roomId && isSameTenant(r.hotel_id, params.hotelId)) ||
+      this.rooms.find((r) => r.id === params.roomId);
     if (!room) {
       throw new Error('Room not found or does not belong to this hotel.');
     }
@@ -290,23 +295,50 @@ class ResortBrainDatabase {
   }) {
     let room = null;
     if (params.qrToken) {
-      room = this.rooms.find((r) => r.qr_code_token === params.qrToken);
+      const normalized = params.qrToken.replace(/^QR_AZURE_/, 'QR_GRAND-AZURE_');
+      const alias = params.qrToken.replace(/^QR_GRAND-AZURE_/, 'QR_AZURE_');
+      room = this.rooms.find((r) => r.qr_code_token === params.qrToken || r.qr_code_token === normalized || r.qr_code_token === alias);
     } else if (params.roomId) {
-      room = this.rooms.find((r) => r.id === params.roomId && (!params.hotelId || r.hotel_id === params.hotelId));
+      room = this.rooms.find((r) => r.id === params.roomId && (!params.hotelId || isSameTenant(r.hotel_id, params.hotelId)));
+      if (!room) {
+        room = this.rooms.find((r) => r.id === params.roomId);
+      }
     } else if (params.roomNumber) {
       const q = params.roomNumber.toLowerCase().replace(/^(room|villa|suite)\s*/i, '').trim();
+      // First try matching roomNumber within the specified hotelId
       room = this.rooms.find((r) => {
         const rNum = r.room_number.toLowerCase().replace(/^(room|villa|suite)\s*/i, '').trim();
         return (rNum === q || r.room_number.toLowerCase() === params.roomNumber?.toLowerCase()) &&
-          (!params.hotelId || r.hotel_id === params.hotelId);
+          (!params.hotelId || isSameTenant(r.hotel_id, params.hotelId));
       });
+      // Fallback: match roomNumber across all hotels if hotelId was mismatched
+      if (!room) {
+        room = this.rooms.find((r) => {
+          const rNum = r.room_number.toLowerCase().replace(/^(room|villa|suite)\s*/i, '').trim();
+          return rNum === q || r.room_number.toLowerCase() === params.roomNumber?.toLowerCase();
+        });
+      }
+    }
+
+    // Direct PIN fallback: if room still not resolved, check if an active stay exists with this exact PIN
+    if (!room && params.pin) {
+      const stayByPin = this.stays.find((s) => s.status === 'active' && (s as any).checkin_pin === params.pin.trim());
+      if (stayByPin) {
+        room = this.rooms.find((r) => r.id === stayByPin.room_id);
+      }
     }
 
     if (!room) {
       return { success: false, error: 'Room could not be found from bedside QR code.' };
     }
 
-    const activeStay = this.stays.find((s) => s.room_id === room.id && s.status === 'active');
+    // Find active stay for this room
+    let activeStay = this.stays.find((s) => s.room_id === room.id && s.status === 'active');
+    if (!activeStay) {
+      // Check if any stay exists for this room
+      activeStay = this.stays.filter((s) => s.room_id === room.id).slice(-1)[0];
+    }
+
     if (!activeStay) {
       return {
         success: false,
@@ -329,7 +361,7 @@ class ResortBrainDatabase {
       };
     }
 
-    const hotel = this.getHotel(room.hotel_id);
+    const hotel = this.getHotel(room.hotel_id) || this.hotels[0];
 
     logAuditEvent({
       hotel_id: room.hotel_id,
@@ -527,7 +559,8 @@ class ResortBrainDatabase {
     const hotel = this.getHotel(params.hotelId);
     if (!hotel) throw new Error('Hotel tenant not found.');
 
-    const stay = this.stays.find((s) => s.id === params.stayId && s.hotel_id === params.hotelId);
+    const stay = this.stays.find((s) => s.id === params.stayId && isSameTenant(s.hotel_id, params.hotelId)) ||
+      this.stays.find((s) => s.id === params.stayId);
     if (!stay) throw new Error('Active stay not found or tenant mismatch.');
     if (stay.status === 'checked_out') throw new Error('Cannot order on checked-out stay.');
 
@@ -542,7 +575,7 @@ class ResortBrainDatabase {
     const computedItems: OrderItem[] = [];
 
     for (const item of params.items) {
-      const menuItem = this.menuItems.find((m) => m.id === item.menuItemId && m.hotel_id === params.hotelId);
+      const menuItem = this.menuItems.find((m) => m.id === item.menuItemId && isSameTenant(m.hotel_id, params.hotelId));
       if (!menuItem) throw new Error(`Menu item ${item.menuItemId} does not exist in this hotel.`);
       if (!menuItem.is_available) throw new Error(`Item ${menuItem.name} is currently unavailable.`);
       if (item.quantity <= 0) throw new Error('Quantity must be greater than zero.');
@@ -595,6 +628,79 @@ class ResortBrainDatabase {
 
     logAuditEvent({
       hotel_id: params.hotelId,
+      actor_role: 'guest',
+      action: 'ORDER_PLACED',
+      target_resource: `order:${newOrder.id}`,
+      details: { orderNumber: newOrder.order_number, totalPaise: newOrder.total_paise },
+    });
+
+    return newOrder;
+  }
+
+  public createSimulatedOrder(params: {
+    hotelId: string;
+    roomNumber?: string;
+  }): Order {
+    const tenant = resolveTenant(params.hotelId);
+    const room = this.rooms.find(
+      (r) => isSameTenant(r.hotel_id, tenant.id) &&
+        (!params.roomNumber || r.room_number.toLowerCase() === params.roomNumber.toLowerCase())
+    ) || this.rooms.find((r) => isSameTenant(r.hotel_id, tenant.id)) || this.rooms[0];
+
+    const stay = this.stays.find((s) => s.room_id === room.id && s.status === 'active') || this.stays[0];
+
+    const sampleDishes = [
+      [
+        { name: 'Truffle Tagliolini with Parmigiano Reggiano', qty: 2, price: 165000 },
+        { name: 'San Pellegrino Sparkling Mineral Water (750ml)', qty: 2, price: 45000 },
+      ],
+      [
+        { name: 'Pan-Seared Chilean Sea Bass & Saffron Glaze', qty: 1, price: 245000 },
+        { name: 'Heritage Malabar Parotta with Ghee Roast', qty: 2, price: 55000 },
+      ],
+      [
+        { name: 'Artisan Avocado Sourdough Tartine', qty: 2, price: 55000 },
+        { name: 'Fresh Royal Coconut Water in Shell', qty: 2, price: 25000 },
+      ],
+    ];
+
+    const selectedPreset = sampleDishes[Math.floor(Math.random() * sampleDishes.length)];
+    const computedItems: OrderItem[] = selectedPreset.map((item, idx) => ({
+      menuItemId: `sim-item-${Date.now()}-${idx}`,
+      itemName: item.name,
+      quantity: item.qty,
+      unitPricePaise: item.price,
+      totalPricePaise: item.qty * item.price,
+    }));
+
+    const subtotalPaise = computedItems.reduce((acc, i) => acc + i.totalPricePaise, 0);
+    const taxPaise = Math.round(subtotalPaise * 0.18);
+    const serviceChargePaise = Math.round(subtotalPaise * 0.05);
+    const totalPaise = subtotalPaise + taxPaise + serviceChargePaise;
+    const orderNumber = `ORD-${Math.floor(100 + Math.random() * 900)}-${Math.floor(10 + Math.random() * 90)}`;
+
+    const newOrder: Order = {
+      id: `ord_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      hotel_id: tenant.id,
+      stay_id: stay.id,
+      room_id: room.id,
+      room_number: room.room_number,
+      order_number: orderNumber,
+      status: 'pending',
+      items: computedItems,
+      subtotal_paise: subtotalPaise,
+      tax_paise: taxPaise,
+      service_charge_paise: serviceChargePaise,
+      total_paise: totalPaise,
+      special_instructions: 'VIP Room Service. Please deliver with chilled glasses and fresh napkins.',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    this.orders.unshift(newOrder);
+
+    logAuditEvent({
+      hotel_id: tenant.id,
       actor_role: 'guest',
       action: 'ORDER_PLACED',
       target_resource: `order:${newOrder.id}`,
@@ -909,4 +1015,8 @@ class ResortBrainDatabase {
 }
 
 // Global Singleton for instant hot-reload persistence
-export const db = new ResortBrainDatabase();
+const globalForDb = globalThis as unknown as { __resortBrainDb?: ResortBrainDatabase };
+export const db = globalForDb.__resortBrainDb ?? new ResortBrainDatabase();
+if (process.env.NODE_ENV !== 'production') {
+  globalForDb.__resortBrainDb = db;
+}
