@@ -1,0 +1,24 @@
+# .github/CODEOWNERS
+# Member 1: @m1 (Platform and Backend Lead)
+# Member 2: @m2 (Guest and Commerce Co-Lead)
+# Member 3: @m3 (Operations and Control Co-Lead)
+
+/db/ @m1
+/server/ @m1
+/modules/ @m1
+/app/api/ @m1
+/.github/ @m1
+/app/(guest)/ @m2
+/components/guest/ @m2
+/app/(staff)/ @m3
+/app/(admin)/ @m3
+/components/staff/ @m3
+/tests/e2e/ @m3
+/components/ui/guest-kit/ @m2
+/components/ui/ops-kit/ @m3
+/components/ui/tokens/ @m2 @m3
+/app/(marketing)/landing/ @m2
+/app/(marketing)/pricing/ @m3
+/docs/ @m2 @m3
+/db/seed/guest/ @m2 @m1
+/db/seed/ops/ @m3 @m1
