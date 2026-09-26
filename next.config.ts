@@ -28,6 +28,39 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+  async redirects() {
+    return [
+      {
+        source: '/guest',
+        has: [
+          {
+            type: 'query',
+            key: 'qr',
+            value: '(?<token>.*)',
+          },
+        ],
+        destination: '/q/:token',
+        permanent: false,
+      },
+      {
+        source: '/guest',
+        has: [
+          {
+            type: 'query',
+            key: 'hotel',
+            value: '(?<slug>.*)',
+          },
+        ],
+        destination: '/h/:slug',
+        permanent: false,
+      },
+      {
+        source: '/guest',
+        destination: '/h/grand-azure',
+        permanent: false,
+      },
+    ];
+  },
 };
 
 export default nextConfig;

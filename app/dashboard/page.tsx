@@ -202,7 +202,7 @@ export default function DashboardPage() {
       const currentHotelSlug = hotelsList.find((h) => h.id === currentHotelId)?.slug || 'grand-azure';
 
       for (const room of roomsList) {
-        const targetUrl = `${origin}/guest?room=${encodeURIComponent(room.room_number)}&hotel=${currentHotelSlug}&qr=${room.qr_code_token}`;
+        const targetUrl = `${origin}/q/${room.qr_code_token}`;
         try {
           const dataUrl = await QRCode.toDataURL(targetUrl, {
             width: 320,
@@ -483,7 +483,7 @@ export default function DashboardPage() {
                 Guest Experience
               </div>
               <Link
-                href="/guest"
+                href={`/h/${currentHotel.slug}`}
                 target="_blank"
                 className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold text-slate-400 hover:text-slate-200 hover:bg-slate-900/80 transition-colors"
               >

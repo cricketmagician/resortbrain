@@ -342,10 +342,12 @@ export function DemoControlBar() {
               [9] Console
             </Link>
             <Link
-              href="/guest"
+              href="/h/grand-azure"
               className={cn(
                 "px-2 py-1 rounded hover:bg-slate-800 hover:text-white transition-colors",
-                pathname === "/guest" ? "bg-emerald-950 text-emerald-300 font-bold" : ""
+                pathname?.startsWith("/h/") || pathname?.startsWith("/q/") || pathname === "/guest"
+                  ? "bg-emerald-950 text-emerald-300 font-bold"
+                  : ""
               )}
             >
               [0] Guest PWA
