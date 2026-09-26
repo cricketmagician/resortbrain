@@ -1,11 +1,13 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { usePathname } from 'next/navigation';
 import { WifiOff, Wifi } from 'lucide-react';
 import { useNetworkStatus } from '@/lib/guest/network';
 import { GUEST_COPY } from '@/lib/guest/copy';
 
 export function OfflineBanner() {
+  const pathname = usePathname();
   const status = useNetworkStatus();
   const previousStatus = useRef(status);
   const [justReconnected, setJustReconnected] = useState(false);
@@ -19,6 +21,9 @@ export function OfflineBanner() {
     const timer = setTimeout(() => setJustReconnected(false), 2000);
     return () => clearTimeout(timer);
   }, [status]);
+
+  // The /offline page already says "You're offline" as its whole reason for existing.
+  if (pathname === '/offline') return null;
 
   const isOffline = status === 'offline';
   if (!isOffline && !justReconnected) return null;

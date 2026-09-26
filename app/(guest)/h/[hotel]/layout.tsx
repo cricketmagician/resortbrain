@@ -5,6 +5,8 @@ import { getPublicHotel, listHotelSlugs } from '@/lib/guest/server/hotels';
 import { GuestProviders } from '@/components/guest/guest-providers';
 import { AppBar } from '@/components/guest/app-bar';
 import { BottomNav } from '@/components/guest/bottom-nav';
+import { InstallPrompt } from '@/components/guest/install-prompt';
+import { SwRegistrar } from '@/components/guest/sw-registrar';
 
 export const revalidate = 300;
 export const dynamicParams = true;
@@ -21,6 +23,7 @@ export async function generateMetadata(props: LayoutProps<'/h/[hotel]'>): Promis
   return {
     title: hotel.name,
     appleWebApp: { capable: true, title: hotel.shortName, statusBarStyle: 'black-translucent' },
+    manifest: `/h/${hotel.slug}/manifest.webmanifest`,
   };
 }
 
@@ -43,6 +46,8 @@ export default async function HotelLayout(props: LayoutProps<'/h/[hotel]'>) {
           <AppBar hotel={hotel} />
           <main className="mx-auto w-full max-w-[480px] flex-1 px-4 pb-[calc(64px+env(safe-area-inset-bottom)+24px)] pt-4">{props.children}</main>
           <BottomNav hotel={hotel} />
+          <InstallPrompt hotel={hotel} />
+          <SwRegistrar />
         </div>
       </GuestProviders>
     </div>
