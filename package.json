@@ -10,23 +10,29 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run tests/unit tests/integration",
     "test:rls": "vitest run tests/rls",
-    "seed": "tsx db/seed/runner.ts"
+    "seed": "tsx db/seed/runner.ts",
+    "perf:guest": "node scripts/perf/guest-budget.mjs",
+    "verify:images": "node scripts/verify-seed-images.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.2",
     "lucide-react": "^1.48.0",
     "next": "16.3.6",
+    "qrcode": "^1.5.4",
     "react": "19.2.8",
     "react-dom": "19.2.8",
+    "swr": "^2.5.1",
     "zod": "^4.6.5"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
+    "@types/qrcode": "^1.5.6",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.3.6",
+    "playwright-core": "^1.63.0",
     "tailwindcss": "^4",
     "tsx": "^4.23.15",
     "typescript": "^5",
