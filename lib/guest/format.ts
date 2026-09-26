@@ -24,33 +24,41 @@ export function formatMoney(paise: number, currency = 'INR'): string {
   return getMoneyFormatter(currency, fd).format(paise / 100);
 }
 
-const timeFormatters = new Map<string, Intl.DateTimeFormat>();
-const dateTimeFormatters = new Map<string, Intl.DateTimeFormat>();
+// ICU's short month and am/pm casing for en-IN varies by platform ("Sept" vs "Sep", "pm" vs
+// "PM"), which would make the same timestamp render differently across environments. Pulling
+// the raw parts out and assembling the string ourselves keeps it identical everywhere.
+const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-export function formatTime(iso: string, timeZone: string): string {
-  let formatter = timeFormatters.get(timeZone);
-  if (!formatter) {
-    formatter = new Intl.DateTimeFormat('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone });
-    timeFormatters.set(timeZone, formatter);
-  }
-  return formatter.format(new Date(iso));
-}
+const partsFormatters = new Map<string, Intl.DateTimeFormat>();
 
-export function formatDateTime(iso: string, timeZone: string): string {
-  let formatter = dateTimeFormatters.get(timeZone);
+function getDateParts(iso: string, timeZone: string): Record<string, string> {
+  let formatter = partsFormatters.get(timeZone);
   if (!formatter) {
     formatter = new Intl.DateTimeFormat('en-IN', {
       day: '2-digit',
-      month: 'short',
+      month: 'numeric',
       year: 'numeric',
       hour: 'numeric',
       minute: '2-digit',
       hour12: true,
       timeZone,
     });
-    dateTimeFormatters.set(timeZone, formatter);
+    partsFormatters.set(timeZone, formatter);
   }
-  return formatter.format(new Date(iso));
+  const parts: Record<string, string> = {};
+  for (const part of formatter.formatToParts(new Date(iso))) parts[part.type] = part.value;
+  return parts;
+}
+
+export function formatTime(iso: string, timeZone: string): string {
+  const p = getDateParts(iso, timeZone);
+  return `${p.hour}:${p.minute} ${p.dayPeriod.toUpperCase()}`;
+}
+
+export function formatDateTime(iso: string, timeZone: string): string {
+  const p = getDateParts(iso, timeZone);
+  const month = MONTH_ABBR[Number(p.month) - 1];
+  return `${p.day} ${month} ${p.year}, ${p.hour}:${p.minute} ${p.dayPeriod.toUpperCase()}`;
 }
 
 export function formatRelative(iso: string, now: number = Date.now()): string {
