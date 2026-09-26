@@ -29,7 +29,9 @@ export function GuestShowcase() {
           <Card tone="raised" className="p-6 md:col-span-4">
             <h3 className="font-display text-lg text-ink">{branded.title}</h3>
             <p className="mt-1 text-sm text-ink-muted">{branded.body}</p>
-            <div aria-hidden className="pointer-events-none mt-5 grid select-none grid-cols-1 gap-4 sm:grid-cols-2">
+            {/* inert, not just aria-hidden: these preview cards render real buttons that would
+                otherwise still catch keyboard focus even though assistive tech can't see them. */}
+            <div aria-hidden inert className="pointer-events-none mt-5 grid select-none grid-cols-1 gap-4 sm:grid-cols-2">
               {SHOWCASE_ITEMS.map((item) => (
                 <StaticMenuItemCard key={item.id} item={item} layout="feature" />
               ))}
@@ -47,7 +49,7 @@ export function GuestShowcase() {
           <Card tone="raised" className="p-6 md:col-span-2">
             <h3 className="font-display text-lg text-ink">{requests.title}</h3>
             <p className="mt-1 text-sm text-ink-muted">{requests.body}</p>
-            <div aria-hidden className="pointer-events-none mt-5 flex select-none flex-wrap gap-2">
+            <div aria-hidden inert className="pointer-events-none mt-5 flex select-none flex-wrap gap-2">
               {['Extra towels', 'Turndown', 'Book a taxi'].map((label) => (
                 <Button key={label} variant="chip" size="md">
                   {label}

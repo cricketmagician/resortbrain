@@ -23,8 +23,10 @@ function StepVisual({ step }: { step: number }) {
     );
   }
   if (step === 2) {
+    // inert, not just aria-hidden: the preview card renders real buttons that would otherwise
+    // still catch keyboard focus even though assistive tech can't see them.
     return (
-      <div aria-hidden className="pointer-events-none select-none rounded-lg border border-line bg-surface-2 p-3">
+      <div aria-hidden inert className="pointer-events-none select-none rounded-lg border border-line bg-surface-2 p-3">
         <StaticMenuItemCard item={SHOWCASE_ITEM} layout="row" />
       </div>
     );

@@ -88,4 +88,7 @@ export const GUEST_TID = {
   offline: 'guest-offline',
   landing: 'landing',
   landingDemoQr: 'landing-demo-qr',
+
+  qrSheet: 'qr-print-sheet',
+  qrSheetCard: (roomNumber: string) => `qr-print-card-${roomNumber.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')}`,
 } as const;

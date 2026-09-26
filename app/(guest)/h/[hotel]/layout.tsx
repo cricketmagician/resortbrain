@@ -1,12 +1,19 @@
 import type { CSSProperties } from 'react';
 import type { Metadata } from 'next';
+import dynamic from 'next/dynamic';
 import { notFound } from 'next/navigation';
 import { getPublicHotel, listHotelSlugs } from '@/lib/guest/server/hotels';
 import { GuestProviders } from '@/components/guest/guest-providers';
 import { AppBar } from '@/components/guest/app-bar';
 import { BottomNav } from '@/components/guest/bottom-nav';
-import { InstallPrompt } from '@/components/guest/install-prompt';
-import { SwRegistrar } from '@/components/guest/sw-registrar';
+
+// Both are pure client-only, deferred-behaviour widgets (SW registration waits for window.load;
+// the install sheet waits on visit count / first order) that render nothing until their own
+// effects fire — splitting them into their own chunk keeps first-load JS down (docs/m2/06 §4)
+// without changing when either actually appears on screen. (ssr: false needs a Client Component,
+// and this layout is a Server Component, but both already render null on the server regardless.)
+const InstallPrompt = dynamic(() => import('@/components/guest/install-prompt').then((m) => m.InstallPrompt));
+const SwRegistrar = dynamic(() => import('@/components/guest/sw-registrar').then((m) => m.SwRegistrar));
 
 export const revalidate = 300;
 export const dynamicParams = true;

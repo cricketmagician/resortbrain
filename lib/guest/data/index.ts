@@ -6,8 +6,6 @@
 // on the backend (docs/m2/05 §3).
 
 import { useEffect, useState } from 'react';
-import { httpApi } from './http';
-import { mockApi } from './mock';
 import type { GuestApi } from './types';
 
 export type { GuestApi } from './types';
@@ -50,14 +48,19 @@ async function probeSource(): Promise<'api' | 'mock'> {
 
 let cachedApiPromise: Promise<GuestApi> | null = null;
 
+async function loadApi(source: 'api' | 'mock'): Promise<GuestApi> {
+  // Dynamic, not static, imports: http.ts pulls in zod (~100KB+ gzip) purely for response
+  // validation, and mock.ts pulls in the whole simulator — neither belongs in every guest page's
+  // first-load JS when only one is ever used per session (docs/m2/06 §4's JS budget).
+  if (source === 'api') return (await import('./http')).httpApi;
+  return (await import('./mock')).mockApi;
+}
+
 /** Memoised per page load — never resolves to mock data and then swaps to live data mid-session. */
 export function getGuestApi(): Promise<GuestApi> {
   if (!cachedApiPromise) {
     const configured = readConfiguredSource();
-    cachedApiPromise =
-      configured === 'auto'
-        ? probeSource().then((source) => (source === 'api' ? httpApi : mockApi))
-        : Promise.resolve(configured === 'api' ? httpApi : mockApi);
+    cachedApiPromise = configured === 'auto' ? probeSource().then(loadApi) : loadApi(configured);
   }
   return cachedApiPromise;
 }

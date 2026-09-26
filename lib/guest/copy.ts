@@ -238,4 +238,10 @@ export const GUEST_COPY = {
   demo: { badge: 'Demo data' },
   session: { notYou: 'Not you? Leave this device' },
   theme: { toSunlight: 'Switch to Sunlight mode', toDark: 'Switch to dark mode' },
+  qrSheet: {
+    subtitle: 'In-room dining & service',
+    lines: ['Order food', 'Request anything', 'Pay your bill'] as const,
+    noAppNeeded: 'No app needed — just scan with your camera',
+    print: 'Print sheet',
+  },
 } as const;

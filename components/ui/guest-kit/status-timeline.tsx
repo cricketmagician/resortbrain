@@ -80,12 +80,14 @@ export function StatusTimeline({
               </span>
               <span className={cn('flex min-w-0 flex-1 items-baseline justify-between gap-2', !isVertical && 'flex-col items-center')}>
                 <span className="min-w-0">
-                  <span className={cn('block text-sm', isCurrent ? 'font-semibold text-ink' : isDone ? 'text-ink' : 'text-ink-subtle')}>
+                  <span className={cn('block text-sm', isCurrent ? 'font-semibold text-ink' : isDone ? 'text-ink' : 'text-ink-muted')}>
                     {step.label}
                   </span>
                   {isCurrent && step.hint && <span className="block text-xs text-ink-muted">{step.hint}</span>}
                 </span>
-                {step.at && <span className="shrink-0 text-sm tabular text-ink-subtle">{formatTime(step.at, timeZone)}</span>}
+                {/* ink-subtle is only calibrated against bg/surface-1 (docs/m2/03) — this timeline
+                    routinely sits on surface-2 cards, where it dips under the 4.5:1 AA minimum. */}
+                {step.at && <span className="shrink-0 text-sm tabular text-ink-muted">{formatTime(step.at, timeZone)}</span>}
               </span>
             </li>
           );
@@ -104,7 +106,7 @@ export function StatusTimeline({
             <span>
               <span className={cn('block text-sm font-semibold', terminal.tone === 'danger' ? 'text-danger' : 'text-ink')}>{terminal.label}</span>
               {terminal.hint && <span className="block text-xs text-ink-muted">{terminal.hint}</span>}
-              {terminal.at && <span className="block text-xs tabular text-ink-subtle">{formatTime(terminal.at, timeZone)}</span>}
+              {terminal.at && <span className="block text-xs tabular text-ink-muted">{formatTime(terminal.at, timeZone)}</span>}
             </span>
           </li>
         )}
