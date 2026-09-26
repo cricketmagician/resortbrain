@@ -202,6 +202,14 @@ export default function ResortBrainPlatform() {
         const data = await auditRes.json();
         setAuditLogs(data.logs || []);
       }
+
+      const hotelsRes = await fetch('/api/hotels');
+      if (hotelsRes.ok) {
+        const data = await hotelsRes.json();
+        if (data.hotels && data.hotels.length > 0) {
+          setHotelsList(data.hotels);
+        }
+      }
     } catch (err) {
       console.error('Data refresh error:', err);
     }
@@ -1493,6 +1501,33 @@ export default function ResortBrainPlatform() {
             </p>
 
             <div className="space-y-3 pt-2">
+              <button
+                onClick={() => {
+                  const leela = hotelsList.find((h) => h.slug === 'the-leela-palace') || hotelsList[0];
+                  setCurrentHotelId(leela.id);
+                  setLoggedInUser({
+                    name: 'Nihal Kumar (General Manager)',
+                    email: 'nihal.gm@leelapalace.com',
+                    role: 'hotel_manager',
+                    hotelId: leela.id,
+                    hotelName: 'The Leela Palace Resort & Spa',
+                  });
+                  setActiveTab('overview');
+                  setIsLoginModalOpen(false);
+                  setViewMode('dashboard');
+                }}
+                className="w-full p-3.5 rounded-2xl border-2 border-amber-500 bg-amber-500/10 hover:bg-amber-500/20 transition-all text-left flex items-center justify-between group shadow"
+              >
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-extrabold text-sm text-amber-500">Nihal Kumar (General Manager)</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded font-black uppercase bg-amber-500 text-slate-950">Active Tenant</span>
+                  </div>
+                  <div className="text-xs text-slate-300">The Leela Palace Resort & Spa • Executive Suite</div>
+                </div>
+                <ArrowRight className="w-4 h-4 text-amber-500 group-hover:translate-x-1 transition-transform" />
+              </button>
+
               <button
                 onClick={() => handleQuickLogin('manager', 'hotel-001')}
                 className="w-full p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 hover:border-amber-500 bg-slate-50 dark:bg-slate-800/60 hover:bg-amber-500/10 transition-all text-left flex items-center justify-between group"
