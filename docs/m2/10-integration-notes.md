@@ -30,6 +30,7 @@ Each of these would get a `contract` label. M2 has a working fallback for all of
 | C8 | Error semantics | 401 for an invalid or expired stay token, 404 for an unknown order or request, 409 for an invalid transition. Today everything is 400 | Precise guest error states without regex on messages |
 | C9 | Clean install | `vitest@5` needs `@types/node >= 22`, but the root pins `^20`, so `npm ci` fails with ERESOLVE | CI and new clones. Everyone currently needs `--legacy-peer-deps` |
 | C10 | Guest GETs | `GET /api/orders/:id` and `GET /api/requests/:id` scoped by stay token | Tracking pages refetch one entity instead of the whole list |
+| C11 | `sla_minutes` reliability | Confirm `service_requests.sla_minutes` is populated on every create path, not just the seed | `lib/guest/data/http.ts` reads it as `z.number().optional()` and the guest `DelayNotice` (docs/m2/04 §8c) silently has no threshold to compare against when it's missing, so a genuinely late request can go without a delay notice |
 
 ## 3. Security observations for the Security and Release Captain
 
@@ -97,3 +98,21 @@ changed any of it. They're listed so M1 can triage them before the demo.
 | `order.accepted / preparing / ready / delivered` | Timeline advances on the order tracking page and in the activity feed |
 | `request.accepted / started / completed` (API statuses `acknowledged / in_progress / completed`) | Timeline advances on the request tracking page |
 | `invoice.issued / payment.succeeded` | The bill shows Paid, and the receipt becomes available |
+
+## 7. Notes from phases 7–11 (this build, 26 Sep 2026)
+
+- **New read of `db.rooms`.** The room QR print sheet (`/print/qr/[hotel]`, docs/m2/07 §4) needs each hotel's room
+  number and QR token. `lib/guest/server/rooms.ts` is a new, small wrapper — same pattern as
+  `lib/guest/server/hotels.ts` — that reads `db.rooms` (`OPS_ROOMS_SEED`, M3's) and projects only
+  `{ roomNumber, qrToken }`. It's read-only, additive, and doesn't touch `db/seed/ops/**`. Flagging it for M3
+  because it's a new (if narrow) consumer of that seed shape — a rename of `room_number` / `qr_code_token` would
+  need a matching change there.
+- **New env var:** `RB_ENABLE_QR_SHEET` (server-side, unset by default) gates `/print/qr/[hotel]`. It must **never**
+  be set in production — the page prints every room's QR token for a hotel, which is sensitive. Whoever owns
+  deployment config should know it exists and default-off.
+- **`slaMinutes` addition.** `ServiceRequest`, the mock simulator and `lib/guest/data/http.ts` now carry an
+  optional `slaMinutes`, mapped from `sla_minutes` on the raw record, to complete `DelayNotice`'s threshold
+  (docs/m2/04 §8c already needed it; doc 05 §2's view-model listing didn't have it yet). See C11 above.
+- **Performance and accessibility findings from the Performance Captain pass** (perf budgets, Lighthouse, the room
+  QR sheet) are in `docs/m2/qa-log.md` and `docs/perf/*.report.html` rather than duplicated here — worth a look
+  before the pitch, since one finding (LCP on the menu routes) is still open and explained there.

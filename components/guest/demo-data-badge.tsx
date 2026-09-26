@@ -1,14 +1,20 @@
 'use client';
 
 import { useState } from 'react';
+import { usePathname } from 'next/navigation';
 import { X } from 'lucide-react';
 import { useGuestApiSource } from '@/lib/guest/data';
 import { GUEST_COPY } from '@/lib/guest/copy';
 
 export function DemoDataBadge() {
+  const pathname = usePathname();
   const source = useGuestApiSource();
   const [dismissed, setDismissed] = useState(false);
 
+  // This badge floats in the bottom-left corner assuming the hotel shell's reserved bottom-nav
+  // padding is under it. /offline and /q/[token] render outside that shell (no bottom padding),
+  // so on a short viewport the badge can sit on top of real content there instead of empty space.
+  if (pathname === '/offline' || pathname.startsWith('/q/')) return null;
   if (source !== 'mock' || dismissed) return null;
 
   return (
