@@ -1,7 +1,9 @@
 // server/auth.ts
 // Secure token derivation, role authorization, and tenant isolation
 
+import crypto from 'node:crypto';
 import { logAuditEvent } from './audit';
+import { db } from './db';
 
 export type UserRole =
   | 'platform_admin'
@@ -21,6 +23,7 @@ export interface StaffSession {
 export interface GuestSession {
   stayId: string;
   hotelId: string;
+  hotelSlug?: string;
   roomId: string;
   roomNumber: string;
   guestId: string;
@@ -29,33 +32,61 @@ export interface GuestSession {
   expiresAt: string;
 }
 
-// Simple signed token generation for fast local execution
-const SECRET_SALT = process.env.SUPABASE_SERVICE_ROLE_KEY || 'resortbrain_super_secure_vault_2026';
+// Server-authoritative cryptographic secret
+const SECRET_SALT = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.STAY_TOKEN_SECRET || 'resortbrain_super_secure_vault_2026_conclave_edition';
+
+function computeHmac(payload: string, secret: string = SECRET_SALT): string {
+  return crypto.createHmac('sha256', secret).update(payload).digest('base64url');
+}
 
 export function createStayToken(stay: {
   stayId: string;
   hotelId: string;
+  hotelSlug?: string;
   roomId: string;
   roomNumber: string;
   guestId: string;
   guestName: string;
   expiresAt: string;
-}): string {
+}, secret: string = SECRET_SALT): string {
   const payload = Buffer.from(JSON.stringify(stay)).toString('base64url');
-  // Simple HMAC simulation for verifiable tokens
-  const signature = Buffer.from(`${payload}.${SECRET_SALT}`).toString('base64url').slice(0, 16);
+  const signature = computeHmac(payload, secret);
   return `rb_${payload}.${signature}`;
 }
 
-export function verifyStayToken(token: string): GuestSession | null {
+export function verifyStayToken(token: string, secret: string = SECRET_SALT): GuestSession | null {
   try {
-    if (!token.startsWith('rb_')) return null;
+    if (!token) return null;
+
+    // Handle seeded legacy/demo tokens cleanly
+    if (!token.startsWith('rb_')) {
+      const seeded = db.getStayByToken(token);
+      if (seeded) {
+        const hotel = db.getHotel(seeded.hotel_id);
+        return {
+          stayId: seeded.id,
+          hotelId: seeded.hotel_id,
+          hotelSlug: hotel?.slug,
+          roomId: seeded.room_id,
+          roomNumber: seeded.room_number,
+          guestId: seeded.guest_id,
+          guestName: seeded.guest_name,
+          token,
+          expiresAt: seeded.check_out,
+        };
+      }
+      return null;
+    }
+
     const raw = token.slice(3);
     const [payload, signature] = raw.split('.');
     if (!payload || !signature) return null;
 
-    const expectedSig = Buffer.from(`${payload}.${SECRET_SALT}`).toString('base64url').slice(0, 16);
-    if (signature !== expectedSig) {
+    const expectedSig = computeHmac(payload, secret);
+    const sigBuf = Buffer.from(signature);
+    const expBuf = Buffer.from(expectedSig);
+
+    if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) {
       logAuditEvent({
         actor_role: 'unauthenticated_guest',
         action: 'TOKEN_TAMPER_DETECTED',
@@ -80,6 +111,7 @@ export function verifyStayToken(token: string): GuestSession | null {
     return {
       stayId: decoded.stayId,
       hotelId: decoded.hotelId,
+      hotelSlug: decoded.hotelSlug,
       roomId: decoded.roomId,
       roomNumber: decoded.roomNumber,
       guestId: decoded.guestId,
@@ -90,6 +122,33 @@ export function verifyStayToken(token: string): GuestSession | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * Extracts stay token from Authorization header (Bearer), x-stay-token header, query string, or body
+ */
+export function extractStayToken(req: Request, searchParams?: URLSearchParams): string | null {
+  const authHeader = req.headers.get('authorization');
+  if (authHeader && authHeader.toLowerCase().startsWith('bearer ')) {
+    const candidate = authHeader.slice(7).trim();
+    if (candidate) return candidate;
+  }
+
+  const customHeader = req.headers.get('x-stay-token');
+  if (customHeader) return customHeader.trim();
+
+  if (searchParams) {
+    const param = searchParams.get('stayToken') || searchParams.get('token');
+    if (param) return param.trim();
+  }
+
+  try {
+    const url = new URL(req.url);
+    const param = url.searchParams.get('stayToken') || url.searchParams.get('token');
+    if (param) return param.trim();
+  } catch {}
+
+  return null;
 }
 
 /**

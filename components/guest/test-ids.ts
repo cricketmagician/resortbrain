@@ -1,0 +1,91 @@
+// components/guest/test-ids.ts
+// The E2E test-ID contract for M3's Playwright suite (docs/m2/06 §7). Import the exact strings
+// from here rather than retyping them. The current timeline step also carries data-status.
+
+export const GUEST_TID = {
+  appBar: 'guest-appbar',
+  roomChip: 'guest-room-chip',
+  themeToggle: 'guest-theme-toggle',
+
+  qrLoading: 'guest-qr-loading',
+  qrError: 'guest-qr-error',
+  qrRetry: 'guest-qr-retry',
+
+  home: 'guest-home',
+  greeting: 'guest-home-greeting',
+  activeStrip: 'guest-active-strip',
+  quick: (k: string) => `guest-quick-${k}`,
+  nav: (k: string) => `guest-nav-${k}`,
+
+  menu: 'guest-menu',
+  menuSearch: 'menu-search',
+  vegToggle: 'menu-veg-toggle',
+  menuCat: (slug: string) => `menu-cat-${slug}`,
+  menuItem: (id: string) => `menu-item-${id}`,
+  menuAdd: (id: string) => `menu-add-${id}`,
+  menuQty: (id: string) => `menu-qty-${id}`,
+  cartBar: 'cart-bar',
+  itemSheet: 'item-sheet',
+  itemDetail: 'item-detail',
+  itemNote: 'item-note',
+  itemQty: 'item-qty',
+  itemAdd: 'item-add',
+
+  cart: 'guest-cart',
+  cartLine: (id: string) => `cart-line-${id}`,
+  cartNote: 'cart-note',
+  cartQuote: 'cart-quote',
+  cartNoQuote: 'cart-no-quote',
+  cartPlaceOrder: 'cart-place-order',
+  cartEmpty: 'cart-empty',
+
+  request: 'guest-request',
+  requestCategory: (c: string) => `request-category-${c}`,
+  requestPreset: (s: string) => `request-preset-${s}`,
+  requestDetails: 'request-details',
+  requestUrgent: 'request-urgent',
+  requestSubmit: 'request-submit',
+
+  activity: 'guest-activity',
+  activityFilter: (f: string) => `activity-filter-${f}`,
+  activityOrder: (id: string) => `activity-order-${id}`,
+  activityRequest: (id: string) => `activity-request-${id}`,
+
+  orderTracking: 'guest-order-tracking',
+  orderTimeline: 'order-status-timeline',
+  orderCurrent: 'order-status-current',
+  orderLiveIndicator: 'order-live-indicator',
+  orderDelayNotice: 'order-delay-notice',
+  orderTotals: 'order-totals',
+
+  requestTracking: 'guest-request-tracking',
+  requestTimeline: 'request-status-timeline',
+  requestCurrent: 'request-status-current',
+
+  bill: 'guest-bill',
+  billInvoiceNumber: 'bill-invoice-number',
+  billStatus: 'bill-status',
+  billOrder: (id: string) => `bill-order-${id}`,
+  billTotal: 'bill-total',
+  billMethod: (m: string) => `bill-method-${m.replace('_test', '')}`,
+  billPay: 'bill-pay',
+  paymentSheet: 'payment-sheet',
+  paymentConfirm: 'payment-confirm',
+  paymentProcessing: 'payment-processing',
+  paymentError: 'payment-error',
+
+  receipt: 'guest-receipt',
+  receiptPrint: 'receipt-print',
+  receiptInvoicePdf: 'receipt-invoice-pdf',
+  receiptShare: 'receipt-share',
+  feedbackForm: 'feedback-form',
+  feedbackStar: (n: number) => `feedback-star-${n}`,
+  feedbackTag: (slug: string) => `feedback-tag-${slug}`,
+  feedbackSubmit: 'feedback-submit',
+  feedbackThanks: 'feedback-thanks',
+
+  rejoin: 'rejoin-screen',
+  offline: 'guest-offline',
+  landing: 'landing',
+  landingDemoQr: 'landing-demo-qr',
+} as const;
