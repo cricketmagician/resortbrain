@@ -87,7 +87,7 @@ export function Sheet({ open, onOpenChange, title, description, children, footer
     >
       <div
         className={cn(
-          'flex w-full flex-col overflow-hidden bg-surface-1 shadow-rb-3',
+          'flex w-full flex-col overflow-hidden bg-surface shadow-rb-3',
           'max-h-[92dvh] rounded-t-xl md:max-h-[85dvh] md:rounded-xl',
           'animate-sheet-up md:animate-fade',
           SIZE_CLASSES[size]
