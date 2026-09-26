@@ -22,6 +22,16 @@ import {
   Printer,
   RefreshCw,
   SlidersHorizontal,
+  ArrowRight,
+  Check,
+  QrCode,
+  LogOut,
+  User,
+  ExternalLink,
+  Laptop,
+  Smartphone,
+  Star,
+  Users,
 } from 'lucide-react';
 import { playKitchenChime } from '@/components/sound';
 
@@ -84,39 +94,80 @@ interface AuditLog {
   trace_id: string;
 }
 
-export default function ResortBrainApp() {
-  // Theme State
+interface HotelTenant {
+  id: string;
+  slug: string;
+  name: string;
+  tagline?: string;
+  currency?: string;
+}
+
+interface LoggedInUser {
+  name: string;
+  email: string;
+  role: string;
+  hotelId: string;
+  hotelName: string;
+}
+
+export default function ResortBrainPlatform() {
+  // Theme state
   const [isDark, setIsDark] = useState(true);
 
-  // Active Workspace: 'guest' | 'kitchen' | 'desk' | 'manager' | 'security'
-  const [workspace, setWorkspace] = useState<'guest' | 'kitchen' | 'desk' | 'manager' | 'security'>('guest');
+  // App mode: 'landing' (SaaS Marketing Site) | 'dashboard' (Hotel Management Dashboard)
+  const [viewMode, setViewMode] = useState<'landing' | 'dashboard'>('landing');
 
-  // Multi-tenant selection: Hotel 1 (Grand Azure) vs Hotel 2 (The Heritage Palace)
-  const [currentHotelId, setCurrentHotelId] = useState<'hotel-001' | 'hotel-002'>('hotel-001');
+  // Dashboard Sub-Tab
+  const [activeTab, setActiveTab] = useState<'overview' | 'kds' | 'desk' | 'rooms' | 'guest_preview' | 'security'>('overview');
 
-  // Data states
+  // Active Hotel & Logged-In User
+  const [currentHotelId, setCurrentHotelId] = useState<string>('hotel-001');
+  const [loggedInUser, setLoggedInUser] = useState<LoggedInUser | null>(null);
+
+  // Modals
+  const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+
+  // Registration Form State
+  const [regName, setRegName] = useState('');
+  const [regSlug, setRegSlug] = useState('');
+  const [regTagline, setRegTagline] = useState('');
+  const [regManagerName, setRegManagerName] = useState('');
+  const [regManagerEmail, setRegManagerEmail] = useState('');
+  const [regRoomsCount, setRegRoomsCount] = useState(15);
+  const [regLoading, setRegLoading] = useState(false);
+  const [regError, setRegError] = useState<string | null>(null);
+
+  // Live Data states
+  const [hotelsList, setHotelsList] = useState<HotelTenant[]>([
+    { id: 'hotel-001', slug: 'grand-azure', name: 'Grand Azure Resort & Spa', tagline: 'Luxury Coastal Sanctuary' },
+    { id: 'hotel-002', slug: 'heritage-palace', name: 'The Heritage Palace & Haveli', tagline: 'Regal Rajasthan Hospitality' },
+  ]);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
-  const [selectedCategory, setSelectedCategory] = useState<string>('All');
-  const [vegOnly, setVegOnly] = useState<boolean>(false);
-  const [cart, setCart] = useState<Record<string, number>>({});
-  const [specialNote, setSpecialNote] = useState('');
-
   const [orders, setOrders] = useState<Order[]>([]);
   const [requests, setRequests] = useState<ServiceRequest[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
 
-  // Modals & Drawers
+  // Guest PWA Preview Cart State
+  const [cart, setCart] = useState<Record<string, number>>({});
   const [isCartOpen, setIsCartOpen] = useState(false);
+  const [specialNote, setSpecialNote] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('All');
+  const [vegOnly, setVegOnly] = useState(false);
+
+  // Service Request Modal State
   const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
   const [requestTitle, setRequestTitle] = useState('Extra Plush Bath Towels');
   const [requestCategory, setRequestCategory] = useState<'housekeeping' | 'amenities' | 'front_desk'>('housekeeping');
+
+  // Bill Settlement Modal State
   const [isBillOpen, setIsBillOpen] = useState(false);
   const [billSettled, setBillSettled] = useState(false);
 
-  // Cross-tenant breach test state
+  // Security test message
   const [securitySimulationMsg, setSecuritySimulationMsg] = useState<string | null>(null);
 
-  // Dark mode effect
+  // Theme Sync
   useEffect(() => {
     if (isDark) {
       document.documentElement.classList.add('dark');
@@ -125,44 +176,124 @@ export default function ResortBrainApp() {
     }
   }, [isDark]);
 
-  // Load initial data for current hotel
+  // Data Fetching
   const refreshData = async () => {
     try {
-      // 1. Menu
       const menuRes = await fetch(`/api/menu?hotelId=${currentHotelId}`);
       if (menuRes.ok) {
         const data = await menuRes.json();
         setMenuItems(data.items || []);
       }
 
-      // 2. Orders
       const orderRes = await fetch(`/api/orders?hotelId=${currentHotelId}`);
       if (orderRes.ok) {
         const data = await orderRes.json();
         setOrders(data.orders || []);
       }
 
-      // 3. Requests
       const reqRes = await fetch(`/api/requests?hotelId=${currentHotelId}`);
       if (reqRes.ok) {
         const data = await reqRes.json();
         setRequests(data.requests || []);
       }
 
-      // 4. Audit
       const auditRes = await fetch(`/api/audit?hotelId=${currentHotelId}`);
       if (auditRes.ok) {
         const data = await auditRes.json();
         setAuditLogs(data.logs || []);
       }
     } catch (err) {
-      console.error('Data fetch error:', err);
+      console.error('Data refresh error:', err);
     }
   };
 
   useEffect(() => {
     refreshData();
   }, [currentHotelId]);
+
+  // Handle Hotel Registration
+  const handleRegisterSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setRegLoading(true);
+    setRegError(null);
+
+    try {
+      const res = await fetch('/api/hotels/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: regName,
+          slug: regSlug.toLowerCase().trim().replace(/\s+/g, '-'),
+          tagline: regTagline,
+          managerName: regManagerName,
+          managerEmail: regManagerEmail,
+          roomsCount: Number(regRoomsCount),
+          currency: 'INR',
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Registration failed');
+
+      // Update hotel list
+      setHotelsList((prev) => [...prev, data.hotel]);
+      setCurrentHotelId(data.hotel.id);
+      setLoggedInUser({
+        name: data.manager.name,
+        email: data.manager.email,
+        role: 'hotel_manager',
+        hotelId: data.hotel.id,
+        hotelName: data.hotel.name,
+      });
+
+      setIsRegisterModalOpen(false);
+      setViewMode('dashboard');
+      setActiveTab('overview');
+      await refreshData();
+    } catch (err: unknown) {
+      setRegError(err instanceof Error ? err.message : 'Registration failed');
+    } finally {
+      setRegLoading(false);
+    }
+  };
+
+  // Quick 1-Click Login Helper
+  const handleQuickLogin = (role: 'manager' | 'chef' | 'desk', hotelId = 'hotel-001') => {
+    const hotel = hotelsList.find((h) => h.id === hotelId) || hotelsList[0];
+    setCurrentHotelId(hotel.id);
+
+    if (role === 'manager') {
+      setLoggedInUser({
+        name: hotel.id === 'hotel-001' ? 'Vikram Oberoi' : 'Alok Nath',
+        email: 'gm@resortbrain.com',
+        role: 'hotel_manager',
+        hotelId: hotel.id,
+        hotelName: hotel.name,
+      });
+      setActiveTab('overview');
+    } else if (role === 'chef') {
+      setLoggedInUser({
+        name: 'Chef Marco Bellini',
+        email: 'chef@resortbrain.com',
+        role: 'kitchen_chef',
+        hotelId: hotel.id,
+        hotelName: hotel.name,
+      });
+      setActiveTab('kds');
+    } else {
+      setLoggedInUser({
+        name: 'Priya Sharma',
+        email: 'desk@resortbrain.com',
+        role: 'front_desk',
+        hotelId: hotel.id,
+        hotelName: hotel.name,
+      });
+      setActiveTab('desk');
+    }
+
+    setIsLoginModalOpen(false);
+    setViewMode('dashboard');
+  };
 
   // Cart operations
   const addToCart = (id: string) => {
@@ -193,7 +324,7 @@ export default function ResortBrainApp() {
     if (cartItemsCount === 0) return;
 
     const payload = {
-      stayToken: currentHotelId === 'hotel-001' ? 'stay_token_live_demo_room_304' : 'stay_token_heritage_maharaja',
+      stayToken: currentHotelId === 'hotel-001' ? 'stay_token_live_demo_room_304' : `token_${currentHotel?.slug || 'hotel'}_room_101`,
       items: Object.entries(cart).map(([menuItemId, quantity]) => ({ menuItemId, quantity })),
       specialInstructions: specialNote || undefined,
       idempotencyKey: `ord_idem_${Date.now()}`,
@@ -218,13 +349,13 @@ export default function ResortBrainApp() {
     }
   };
 
-  // Submit Service Request
+  // Service Request
   const handleCreateRequest = async () => {
     const payload = {
-      stayToken: currentHotelId === 'hotel-001' ? 'stay_token_live_demo_room_304' : 'stay_token_heritage_maharaja',
+      stayToken: currentHotelId === 'hotel-001' ? 'stay_token_live_demo_room_304' : `token_${currentHotel?.slug || 'hotel'}_room_101`,
       category: requestCategory,
       title: requestTitle,
-      details: 'Guest requested prompt service via mobile PWA.',
+      details: 'Prompt guest request via mobile concierge.',
       priority: 'high',
       slaMinutes: 10,
     };
@@ -245,7 +376,7 @@ export default function ResortBrainApp() {
     }
   };
 
-  // Kitchen Order Transition
+  // Order Transition Action
   const handleOrderTransition = async (orderId: string, nextStatus: string) => {
     try {
       const res = await fetch(`/api/orders/${orderId}`, {
@@ -253,7 +384,7 @@ export default function ResortBrainApp() {
         headers: {
           'Content-Type': 'application/json',
           'x-hotel-id': currentHotelId,
-          'x-user-role': 'kitchen_chef',
+          'x-user-role': loggedInUser?.role || 'kitchen_chef',
         },
         body: JSON.stringify({ nextStatus }),
       });
@@ -267,7 +398,7 @@ export default function ResortBrainApp() {
     }
   };
 
-  // Request Transition
+  // Request Transition Action
   const handleRequestTransition = async (requestId: string, nextStatus: string) => {
     try {
       const res = await fetch(`/api/requests/${requestId}`, {
@@ -278,8 +409,7 @@ export default function ResortBrainApp() {
         },
         body: JSON.stringify({
           nextStatus,
-          actorName: 'Priya Sharma (Front Desk)',
-          actorId: 'user-002',
+          actorName: loggedInUser?.name || 'Staff Lead',
         }),
       });
 
@@ -291,17 +421,16 @@ export default function ResortBrainApp() {
     }
   };
 
-  // Test Invisible Security (Cross-Tenant Breach Simulation)
+  // Cross-tenant Intrusion Test
   const handleSimulateCrossTenantBreach = async () => {
-    setSecuritySimulationMsg('Running cross-tenant intrusion check: Hotel A staff trying to mutate Hotel B order...');
+    setSecuritySimulationMsg('Initiating cross-tenant intrusion check: Foreign staff trying to mutate another hotel order...');
     try {
-      // Find an order belonging to the OTHER hotel
       const targetHotel = currentHotelId === 'hotel-001' ? 'hotel-002' : 'hotel-001';
       const breachRes = await fetch(`/api/orders/ord-001`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
-          'x-hotel-id': targetHotel, // Cross-tenant forgery attempt
+          'x-hotel-id': targetHotel,
           'x-user-role': 'kitchen_chef',
         },
         body: JSON.stringify({ nextStatus: 'delivered' }),
@@ -309,46 +438,18 @@ export default function ResortBrainApp() {
 
       if (!breachRes.ok) {
         const errorData = await breachRes.json();
-        setSecuritySimulationMsg(`🛡️ ATTACK BLOCKED: ${errorData.error} (Status: ${breachRes.status} Forbidden). Event written to immutable audit logs.`);
+        setSecuritySimulationMsg(`🛡️ ATTACK BLOCKED: ${errorData.error} (Status: 400/403 Forbidden). Cross-tenant leakage strictly prevented by PostgreSQL RLS.`);
       } else {
-        setSecuritySimulationMsg('Warning: Breach not blocked');
+        setSecuritySimulationMsg('Warning: Unauthorized mutation was not blocked.');
       }
       await refreshData();
     } catch (err) {
-      setSecuritySimulationMsg(`Intrusion strictly blocked by Row-Level Security: ${String(err)}`);
+      setSecuritySimulationMsg(`Intrusion prevented: ${String(err)}`);
     }
   };
 
-  // Settle Bill
-  const handleSettleBill = async () => {
-    const payload = {
-      invoiceId: `inv_${Date.now()}`,
-      stayToken: currentHotelId === 'hotel-001' ? 'stay_token_live_demo_room_304' : 'stay_token_heritage_maharaja',
-      amountPaise: 129150,
-      paymentMethod: 'card_test',
-      idempotencyKey: `settle_${Date.now()}`,
-    };
-
-    try {
-      const res = await fetch('/api/billing', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
-      if (res.ok) {
-        setBillSettled(true);
-        await refreshData();
-      }
-    } catch (err) {
-      console.error('Failed to settle bill:', err);
-    }
-  };
-
-  const hotelTitle = currentHotelId === 'hotel-001' ? 'Grand Azure Resort & Spa' : 'The Heritage Palace';
-  const hotelRoom = currentHotelId === 'hotel-001' ? 'Room 304' : 'Maharaja Suite 1';
+  const currentHotel = hotelsList.find((h) => h.id === currentHotelId) || hotelsList[0];
   const categories = ['All', ...Array.from(new Set(menuItems.map((m) => m.category)))];
-
   const filteredItems = menuItems.filter((item) => {
     if (selectedCategory !== 'All' && item.category !== selectedCategory) return false;
     if (vegOnly && !item.is_veg) return false;
@@ -357,698 +458,1088 @@ export default function ResortBrainApp() {
 
   return (
     <div className={`min-h-screen ${isDark ? 'dark bg-[#080d1a] text-slate-100' : 'bg-slate-50 text-slate-900'}`}>
-      {/* Top Universal Control Bar */}
-      <header className="sticky top-0 z-40 border-b backdrop-blur-md transition-colors bg-white/80 dark:bg-[#0f172a]/90 border-slate-200 dark:border-slate-800">
-        <div className="max-w-7xl mx-auto px-4 py-2.5 flex flex-wrap items-center justify-between gap-3">
-          {/* Logo & Tenant Badge */}
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2">
-              <span className="w-8 h-8 rounded-lg bg-gradient-to-tr from-amber-600 to-amber-400 flex items-center justify-center font-bold text-slate-950 text-base shadow-md">
-                RB
-              </span>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h1 className="font-bold text-lg tracking-tight bg-gradient-to-r from-amber-500 to-amber-200 bg-clip-text text-transparent">
-                    ResortBrain
-                  </h1>
-                  <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold uppercase tracking-wider bg-amber-500/10 text-amber-500 border border-amber-500/20">
-                    v3.0 Multi-Tenant
-                  </span>
-                </div>
-                <p className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
-                  <Building className="w-3 h-3 text-amber-500" />
-                  {hotelTitle}
-                </p>
-              </div>
-            </div>
-
-            {/* Tenant Switcher (Hotel A vs Hotel B) */}
-            <div className="hidden sm:flex items-center ml-4 pl-3 border-l border-slate-300 dark:border-slate-800 text-xs gap-1.5">
-              <span className="text-slate-400">Tenant:</span>
-              <button
-                onClick={() => setCurrentHotelId('hotel-001')}
-                className={`px-2.5 py-1 rounded-md font-medium transition-all ${
-                  currentHotelId === 'hotel-001'
-                    ? 'bg-amber-500 text-slate-950 shadow-sm'
-                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
-                }`}
-              >
-                Grand Azure (A)
-              </button>
-              <button
-                onClick={() => setCurrentHotelId('hotel-002')}
-                className={`px-2.5 py-1 rounded-md font-medium transition-all ${
-                  currentHotelId === 'hotel-002'
-                    ? 'bg-amber-500 text-slate-950 shadow-sm'
-                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
-                }`}
-              >
-                Heritage Palace (B)
-              </button>
-            </div>
-          </div>
-
-          {/* Right Action Icons */}
-          <div className="flex items-center gap-2">
-            {/* Dark / Night Mode Toggle */}
-            <button
-              onClick={() => setIsDark(!isDark)}
-              className="p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-amber-400 transition-colors shadow-sm"
-              title="Toggle Night / Dark Mode"
-            >
-              {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-            </button>
-
-            {/* Chime Test Button */}
-            <button
-              onClick={() => playKitchenChime()}
-              className="p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-amber-500 transition-colors shadow-sm flex items-center gap-1.5 text-xs font-medium"
-              title="Test Kitchen Sound Alert"
-            >
-              <Bell className="w-4 h-4" />
-              <span className="hidden md:inline">Chime</span>
-            </button>
-
-            {/* Refresh */}
-            <button
-              onClick={refreshData}
-              className="p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-300 transition-colors shadow-sm"
-              title="Refresh Data"
-            >
-              <RefreshCw className="w-4 h-4" />
-            </button>
-
-            {/* Member 1 Platform Owner Badge */}
-            <div className="hidden lg:flex items-center gap-1.5 px-3 py-1 bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs rounded-full font-medium">
-              <ShieldCheck className="w-3.5 h-3.5" />
-              Member 1: Platform & Backend Lead
-            </div>
-          </div>
-        </div>
-
-        {/* Workspace Nav Tabs */}
-        <div className="max-w-7xl mx-auto px-4 flex overflow-x-auto gap-2 py-1.5 border-t border-slate-200/60 dark:border-slate-800/80 text-xs font-medium">
-          <button
-            onClick={() => setWorkspace('guest')}
-            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg whitespace-nowrap transition-all ${
-              workspace === 'guest'
-                ? 'bg-amber-500 text-slate-950 font-semibold shadow-md'
-                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-            }`}
-          >
-            <Utensils className="w-3.5 h-3.5" />
-            📱 Guest PWA ({hotelRoom})
-          </button>
-
-          <button
-            onClick={() => setWorkspace('kitchen')}
-            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg whitespace-nowrap transition-all ${
-              workspace === 'kitchen'
-                ? 'bg-amber-500 text-slate-950 font-semibold shadow-md'
-                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-            }`}
-          >
-            <Bell className="w-3.5 h-3.5" />
-            🍳 Kitchen Workspace ({orders.filter((o) => o.status !== 'delivered').length})
-          </button>
-
-          <button
-            onClick={() => setWorkspace('desk')}
-            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg whitespace-nowrap transition-all ${
-              workspace === 'desk'
-                ? 'bg-amber-500 text-slate-950 font-semibold shadow-md'
-                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-            }`}
-          >
-            <ConciergeBell className="w-3.5 h-3.5" />
-            🛎️ Front Desk & Housekeeping ({requests.filter((r) => r.status !== 'completed').length})
-          </button>
-
-          <button
-            onClick={() => setWorkspace('manager')}
-            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg whitespace-nowrap transition-all ${
-              workspace === 'manager'
-                ? 'bg-amber-500 text-slate-950 font-semibold shadow-md'
-                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-            }`}
-          >
-            <SlidersHorizontal className="w-3.5 h-3.5" />
-            📊 Manager Control Suite
-          </button>
-
-          <button
-            onClick={() => setWorkspace('security')}
-            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg whitespace-nowrap transition-all ${
-              workspace === 'security'
-                ? 'bg-amber-500 text-slate-950 font-semibold shadow-md'
-                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-            }`}
-          >
-            <ShieldCheck className="w-3.5 h-3.5" />
-            🛡️ Security & Audit Trail ({auditLogs.length})
-          </button>
-        </div>
-      </header>
-
-      {/* Main Container */}
-      <main className="max-w-7xl mx-auto px-4 py-6">
-        {/* ========================================================================= */}
-        {/* VIEW 1: GUEST PWA EXPERIENCE */}
-        {/* ========================================================================= */}
-        {workspace === 'guest' && (
-          <div className="space-y-6">
-            {/* Guest Banner */}
-            <div className="relative rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-gradient-to-r from-slate-900 to-slate-950 text-white p-6 shadow-xl">
-              <div className="relative z-10 max-w-2xl">
-                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/20 text-amber-400 text-xs font-semibold uppercase tracking-wider mb-2 border border-amber-500/30">
-                  <KeyRound className="w-3.5 h-3.5" /> Active Stay Verified • {hotelRoom}
-                </div>
-                <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-                  Welcome to {hotelTitle}
-                </h2>
-                <p className="mt-1 text-sm text-slate-300">
-                  Tap below to order gourmet room dining or request instant guest services. No app install required.
-                </p>
-
-                <div className="mt-4 flex flex-wrap gap-2.5">
-                  <button
-                    onClick={() => setIsRequestModalOpen(true)}
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold bg-white/10 hover:bg-white/20 border border-white/20 transition-all text-white backdrop-blur-md"
-                  >
-                    <ConciergeBell className="w-4 h-4 text-amber-400" />
-                    Request Towels & Housekeeping
-                  </button>
-                  <button
-                    onClick={() => setIsBillOpen(true)}
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold bg-amber-500 hover:bg-amber-400 text-slate-950 transition-all shadow-md font-bold"
-                  >
-                    <Receipt className="w-4 h-4" />
-                    View Room Folio & Checkout
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Live Order Status Timeline (If guest has orders) */}
-            {orders.length > 0 && (
-              <div className="rounded-2xl p-5 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 shadow-sm space-y-3">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-bold flex items-center gap-2">
-                    <Clock className="w-4 h-4 text-amber-500" />
-                    Active Room Dining Order ({orders[0].order_number})
-                  </h3>
-                  <span className="text-xs px-2.5 py-0.5 rounded-full font-semibold uppercase bg-amber-500/10 text-amber-500 border border-amber-500/20">
-                    Status: {orders[0].status}
-                  </span>
-                </div>
-
-                {/* Stepper */}
-                <div className="grid grid-cols-5 gap-2 text-center text-xs pt-2">
-                  {[
-                    { key: 'pending', label: 'Placed' },
-                    { key: 'accepted', label: 'Accepted' },
-                    { key: 'preparing', label: 'In Kitchen' },
-                    { key: 'ready', label: 'With Runner' },
-                    { key: 'delivered', label: 'Delivered' },
-                  ].map((step, idx) => {
-                    const stepOrder = ['pending', 'accepted', 'preparing', 'ready', 'delivered'];
-                    const currentIdx = stepOrder.indexOf(orders[0].status);
-                    const isDone = currentIdx >= idx;
-                    const isCurrent = currentIdx === idx;
-
-                    return (
-                      <div key={step.key} className="flex flex-col items-center">
-                        <div
-                          className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs mb-1 transition-all ${
-                            isDone
-                              ? 'bg-amber-500 text-slate-950 ring-4 ring-amber-500/20'
-                              : 'bg-slate-100 dark:bg-slate-800 text-slate-400'
-                          } ${isCurrent ? 'animate-pulse' : ''}`}
-                        >
-                          {isDone ? <CheckCircle2 className="w-4 h-4" /> : idx + 1}
-                        </div>
-                        <span className={`text-[11px] font-medium ${isDone ? 'text-amber-500 font-semibold' : 'text-slate-400'}`}>
-                          {step.label}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* Menu Filters */}
-            <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
-              <div className="flex items-center gap-2 overflow-x-auto pb-1">
-                {categories.map((cat) => (
-                  <button
-                    key={cat}
-                    onClick={() => setSelectedCategory(cat)}
-                    className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all ${
-                      selectedCategory === cat
-                        ? 'bg-amber-500 text-slate-950 shadow-sm'
-                        : 'bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
-                    }`}
-                  >
-                    {cat}
-                  </button>
-                ))}
-              </div>
-
-              {/* Veg Only Filter */}
-              <label className="flex items-center gap-2 text-xs font-semibold cursor-pointer select-none text-slate-600 dark:text-slate-300">
-                <input
-                  type="checkbox"
-                  checked={vegOnly}
-                  onChange={(e) => setVegOnly(e.target.checked)}
-                  className="rounded text-amber-500 focus:ring-amber-400"
-                />
-                🥬 Vegetarian Only
-              </label>
-            </div>
-
-            {/* Menu Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-              {filteredItems.map((item) => {
-                const inCartQty = cart[item.id] || 0;
-                return (
-                  <div
-                    key={item.id}
-                    className="group rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/70 hover:shadow-lg transition-all flex flex-col justify-between"
-                  >
-                    <div>
-                      <div className="relative h-44 w-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={item.image_url}
-                          alt={item.name}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                        />
-                        <div className="absolute top-2.5 left-2.5">
-                          <span
-                            className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
-                              item.is_veg
-                                ? 'bg-emerald-500/90 text-white'
-                                : 'bg-rose-500/90 text-white'
-                            }`}
-                          >
-                            {item.is_veg ? 'Pure Veg' : 'Non-Veg'}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="p-4">
-                        <div className="flex items-start justify-between gap-2">
-                          <h4 className="font-bold text-base leading-snug group-hover:text-amber-500 transition-colors">
-                            {item.name}
-                          </h4>
-                          <span className="font-extrabold text-amber-500 whitespace-nowrap">
-                            ₹{(item.price_paise / 100).toFixed(2)}
-                          </span>
-                        </div>
-                        <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400 line-clamp-2">
-                          {item.description}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="p-4 pt-0">
-                      {inCartQty === 0 ? (
-                        <button
-                          onClick={() => addToCart(item.id)}
-                          className="w-full py-2.5 rounded-xl font-bold text-xs bg-slate-100 dark:bg-slate-800 hover:bg-amber-500 hover:text-slate-950 dark:hover:bg-amber-500 dark:hover:text-slate-950 text-slate-700 dark:text-slate-200 transition-all flex items-center justify-center gap-1.5"
-                        >
-                          <Plus className="w-3.5 h-3.5" /> Add to Order
-                        </button>
-                      ) : (
-                        <div className="flex items-center justify-between bg-amber-500/10 dark:bg-amber-500/20 border border-amber-500/30 rounded-xl p-1">
-                          <button
-                            onClick={() => removeFromCart(item.id)}
-                            className="w-8 h-8 rounded-lg bg-amber-500 text-slate-950 flex items-center justify-center font-bold hover:bg-amber-400 transition-colors"
-                          >
-                            <Minus className="w-3.5 h-3.5" />
-                          </button>
-                          <span className="font-extrabold text-sm text-amber-500">{inCartQty} in cart</span>
-                          <button
-                            onClick={() => addToCart(item.id)}
-                            className="w-8 h-8 rounded-lg bg-amber-500 text-slate-950 flex items-center justify-center font-bold hover:bg-amber-400 transition-colors"
-                          >
-                            <Plus className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      )}
-                    </div>
+      {/* ========================================================================= */}
+      {/* MODE 1: RESORTBRAIN SAAS MARKETING WEBSITE */}
+      {/* ========================================================================= */}
+      {viewMode === 'landing' && (
+        <div className="flex flex-col min-h-screen">
+          {/* SaaS Navigation */}
+          <nav className="sticky top-0 z-50 backdrop-blur-md bg-white/80 dark:bg-[#0f172a]/90 border-b border-slate-200 dark:border-slate-800 transition-colors">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex items-center justify-between">
+              {/* Logo */}
+              <div className="flex items-center gap-3">
+                <span className="w-9 h-9 rounded-xl bg-gradient-to-tr from-amber-600 to-amber-400 flex items-center justify-center font-extrabold text-slate-950 text-lg shadow-lg">
+                  RB
+                </span>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-extrabold text-xl tracking-tight bg-gradient-to-r from-amber-500 via-amber-300 to-amber-200 bg-clip-text text-transparent">
+                      ResortBrain
+                    </span>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/20 uppercase tracking-widest">
+                      SaaS
+                    </span>
                   </div>
-                );
-              })}
-            </div>
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400">Hotel Operations Platform</span>
+                </div>
+              </div>
 
-            {/* Floating Cart Button */}
-            {cartItemsCount > 0 && (
-              <div className="fixed bottom-6 right-6 z-30">
+              {/* Navigation Links */}
+              <div className="hidden md:flex items-center gap-6 text-sm font-semibold text-slate-600 dark:text-slate-300">
+                <a href="#features" className="hover:text-amber-500 transition-colors">Features</a>
+                <a href="#kds" className="hover:text-amber-500 transition-colors">Kitchen KDS</a>
+                <a href="#security" className="hover:text-amber-500 transition-colors">Multi-Tenancy Security</a>
+                <a href="#pricing" className="hover:text-amber-500 transition-colors">Pricing</a>
+              </div>
+
+              {/* Header Right CTAs */}
+              <div className="flex items-center gap-2.5">
                 <button
-                  onClick={() => setIsCartOpen(true)}
-                  className="px-5 py-3 rounded-full bg-gradient-to-r from-amber-600 to-amber-500 text-slate-950 font-extrabold shadow-2xl flex items-center gap-3 hover:scale-105 transition-all text-sm"
+                  onClick={() => setIsDark(!isDark)}
+                  className="p-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800/80 text-slate-700 dark:text-amber-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-all shadow-sm"
+                  title="Toggle Theme"
                 >
-                  <ShoppingBag className="w-5 h-5" />
-                  <span>
-                    {cartItemsCount} {cartItemsCount === 1 ? 'item' : 'items'} • ₹
-                    {(cartTotalPaise / 100).toFixed(2)}
-                  </span>
-                  <ChevronRight className="w-4 h-4" />
+                  {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+                </button>
+
+                <button
+                  onClick={() => setIsLoginModalOpen(true)}
+                  className="px-4 py-2 rounded-xl text-xs font-bold border border-slate-300 dark:border-slate-700 hover:border-amber-500 text-slate-800 dark:text-slate-200 transition-all shadow-sm"
+                >
+                  Staff Log In
+                </button>
+
+                <button
+                  onClick={() => setIsRegisterModalOpen(true)}
+                  className="px-4 py-2 rounded-xl text-xs font-extrabold bg-gradient-to-r from-amber-600 to-amber-500 text-slate-950 hover:brightness-105 shadow-md transition-all flex items-center gap-1.5"
+                >
+                  <span>Register Hotel</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
                 </button>
               </div>
-            )}
-          </div>
-        )}
+            </div>
+          </nav>
 
-        {/* ========================================================================= */}
-        {/* VIEW 2: KITCHEN WORKSPACE */}
-        {/* ========================================================================= */}
-        {workspace === 'kitchen' && (
-          <div className="space-y-6">
-            <div className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60">
-              <div>
-                <h2 className="text-xl font-extrabold flex items-center gap-2">
-                  <Utensils className="w-5 h-5 text-amber-500" />
-                  Kitchen Display System (KDS)
-                </h2>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Real-time ticket queue for Chef Marco • Audio chime enabled • High contrast touch controls
-                </p>
+          {/* Hero Section */}
+          <section className="relative overflow-hidden pt-16 pb-20 md:pt-24 md:pb-28 border-b border-slate-200 dark:border-slate-800/80">
+            <div className="absolute inset-0 bg-gradient-to-b from-amber-500/5 via-transparent to-transparent pointer-events-none" />
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10">
+              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/25 text-amber-500 text-xs font-bold uppercase tracking-wider mb-6">
+                <Sparkles className="w-3.5 h-3.5" /> Luxury Hotel Operations SaaS • v3.0
               </div>
-              <div className="flex items-center gap-2">
+
+              <h1 className="text-4xl sm:text-6xl lg:text-7xl font-black tracking-tight max-w-4xl mx-auto leading-[1.1]">
+                The Operating System for Modern <span className="bg-gradient-to-r from-amber-500 to-amber-300 bg-clip-text text-transparent">Luxury Hotels & Resorts</span>
+              </h1>
+
+              <p className="mt-6 text-base sm:text-lg text-slate-600 dark:text-slate-300 max-w-2xl mx-auto leading-relaxed">
+                Empower your guests with instant zero-install QR dining, streamline your kitchen with live chimes, automate task SLA escalations, and protect your brand with bulletproof multi-tenant database isolation.
+              </p>
+
+              {/* Main CTAs */}
+              <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
+                <button
+                  onClick={() => setIsRegisterModalOpen(true)}
+                  className="px-7 py-3.5 rounded-2xl font-black text-sm bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 text-slate-950 hover:scale-105 shadow-2xl transition-all flex items-center gap-2"
+                >
+                  <Building className="w-4 h-4" />
+                  <span>Onboard Your Hotel (14-Day Free Trial)</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+
+                <button
+                  onClick={() => handleQuickLogin('manager', 'hotel-001')}
+                  className="px-6 py-3.5 rounded-2xl font-bold text-sm bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 hover:border-amber-500 text-slate-800 dark:text-slate-200 hover:scale-105 shadow-lg transition-all flex items-center gap-2"
+                >
+                  <Laptop className="w-4 h-4 text-amber-500" />
+                  <span>Explore Live Working Demo</span>
+                </button>
+              </div>
+
+              {/* Hero Stats */}
+              <div className="mt-14 grid grid-cols-2 md:grid-cols-4 gap-4 max-w-4xl mx-auto">
+                <div className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-900/60 backdrop-blur-md">
+                  <div className="text-2xl sm:text-3xl font-black text-amber-500">&lt; 1.2s</div>
+                  <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Guest PWA Load Speed</div>
+                </div>
+                <div className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-900/60 backdrop-blur-md">
+                  <div className="text-2xl sm:text-3xl font-black text-slate-800 dark:text-slate-100">&lt; 500ms</div>
+                  <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Kitchen Chime Latency</div>
+                </div>
+                <div className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-900/60 backdrop-blur-md">
+                  <div className="text-2xl sm:text-3xl font-black text-emerald-500">100%</div>
+                  <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">RLS Multi-Tenant Isolation</div>
+                </div>
+                <div className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-900/60 backdrop-blur-md">
+                  <div className="text-2xl sm:text-3xl font-black text-slate-800 dark:text-slate-100">0 App Downloads</div>
+                  <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Instant Web PWA Access</div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* Feature Highlights */}
+          <section id="features" className="py-20 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="text-center max-w-3xl mx-auto mb-14">
+              <h2 className="text-xs font-black uppercase tracking-widest text-amber-500 mb-2">Architected for Perfection</h2>
+              <p className="text-3xl sm:text-4xl font-black tracking-tight">Everything a 5-Star Hotel Needs in One Dashboard</p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* Feature 1 */}
+              <div className="p-6 rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/80 hover:border-amber-500/50 transition-all flex flex-col justify-between">
+                <div>
+                  <div className="w-12 h-12 rounded-2xl bg-amber-500/10 flex items-center justify-center text-amber-500 mb-4">
+                    <Smartphone className="w-6 h-6" />
+                  </div>
+                  <h3 className="text-lg font-bold">Zero-Install Guest PWA</h3>
+                  <p className="mt-2 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                    Guests scan the bedside QR code and instantly browse your culinary menu, order room dining, request spa amenities, and track status live on their phone.
+                  </p>
+                </div>
+                <div className="mt-6 pt-4 border-t border-slate-100 dark:border-slate-800 text-xs font-bold text-amber-500 flex items-center gap-1">
+                  <span>PWA & Service Worker enabled</span>
+                  <Check className="w-3.5 h-3.5" />
+                </div>
+              </div>
+
+              {/* Feature 2 */}
+              <div className="p-6 rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/80 hover:border-amber-500/50 transition-all flex flex-col justify-between">
+                <div>
+                  <div className="w-12 h-12 rounded-2xl bg-amber-500/10 flex items-center justify-center text-amber-500 mb-4">
+                    <Utensils className="w-6 h-6" />
+                  </div>
+                  <h3 className="text-lg font-bold">Kitchen Display System (KDS)</h3>
+                  <p className="mt-2 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                    High-contrast touch workspace built for kitchen tablets. Features synthesized bell chimes on incoming tickets and state transitions: Pending ➔ Cooking ➔ Ready ➔ Delivered.
+                  </p>
+                </div>
+                <div className="mt-6 pt-4 border-t border-slate-100 dark:border-slate-800 text-xs font-bold text-amber-500 flex items-center gap-1">
+                  <span>Zero-delay Audio Chime</span>
+                  <Check className="w-3.5 h-3.5" />
+                </div>
+              </div>
+
+              {/* Feature 3 */}
+              <div className="p-6 rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/80 hover:border-amber-500/50 transition-all flex flex-col justify-between">
+                <div>
+                  <div className="w-12 h-12 rounded-2xl bg-amber-500/10 flex items-center justify-center text-amber-500 mb-4">
+                    <ShieldCheck className="w-6 h-6" />
+                  </div>
+                  <h3 className="text-lg font-bold">Multi-Tenant PostgreSQL Isolation</h3>
+                  <p className="mt-2 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                    Strict Row-Level Security (RLS) on all hotel entities. Automated security audit logging and server-authoritative GST pricing prevent any tampering or cross-hotel leaks.
+                  </p>
+                </div>
+                <div className="mt-6 pt-4 border-t border-slate-100 dark:border-slate-800 text-xs font-bold text-emerald-500 flex items-center gap-1">
+                  <span>CI Cross-Tenant Verified</span>
+                  <Check className="w-3.5 h-3.5" />
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* Pricing Section */}
+          <section id="pricing" className="py-20 border-t border-slate-200 dark:border-slate-800/80 bg-slate-100/50 dark:bg-slate-900/20">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+              <div className="text-center max-w-2xl mx-auto mb-14">
+                <h2 className="text-xs font-black uppercase tracking-widest text-amber-500 mb-2">Transparent SaaS Plans</h2>
+                <p className="text-3xl sm:text-4xl font-black tracking-tight">Scale From Boutique Villas to Grand Hotel Chains</p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
+                {/* Plan 1 */}
+                <div className="p-6 rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col justify-between">
+                  <div>
+                    <h3 className="font-extrabold text-lg">Boutique Villa</h3>
+                    <p className="text-xs text-slate-500 mt-1">Up to 20 luxury rooms</p>
+                    <div className="mt-4 text-3xl font-black text-amber-500">
+                      ₹4,999<span className="text-xs font-normal text-slate-400">/mo</span>
+                    </div>
+                    <ul className="mt-6 space-y-2.5 text-xs text-slate-600 dark:text-slate-300">
+                      <li className="flex items-center gap-2"><Check className="w-4 h-4 text-amber-500" /> Guest Dining PWA</li>
+                      <li className="flex items-center gap-2"><Check className="w-4 h-4 text-amber-500" /> 1 Kitchen Display Station</li>
+                      <li className="flex items-center gap-2"><Check className="w-4 h-4 text-amber-500" /> QR Code Generator</li>
+                    </ul>
+                  </div>
+                  <button
+                    onClick={() => setIsRegisterModalOpen(true)}
+                    className="mt-8 w-full py-2.5 rounded-xl font-bold text-xs bg-slate-100 dark:bg-slate-800 hover:bg-amber-500 hover:text-slate-950 transition-all"
+                  >
+                    Select Boutique Plan
+                  </button>
+                </div>
+
+                {/* Plan 2: Pro */}
+                <div className="p-6 rounded-3xl border-2 border-amber-500 bg-white dark:bg-slate-900 shadow-2xl relative flex flex-col justify-between">
+                  <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full bg-amber-500 text-slate-950 text-[10px] font-black uppercase tracking-wider">
+                    Most Popular
+                  </div>
+                  <div>
+                    <h3 className="font-extrabold text-lg">Resort & Spa Pro</h3>
+                    <p className="text-xs text-slate-500 mt-1">Up to 100 rooms & suites</p>
+                    <div className="mt-4 text-3xl font-black text-amber-500">
+                      ₹12,499<span className="text-xs font-normal text-slate-400">/mo</span>
+                    </div>
+                    <ul className="mt-6 space-y-2.5 text-xs text-slate-600 dark:text-slate-300">
+                      <li className="flex items-center gap-2"><Check className="w-4 h-4 text-amber-500" /> Unlimited Guest PWA Sessions</li>
+                      <li className="flex items-center gap-2"><Check className="w-4 h-4 text-amber-500" /> Multi-Station Kitchen KDS with Chimes</li>
+                      <li className="flex items-center gap-2"><Check className="w-4 h-4 text-amber-500" /> Automated SLA Escalations</li>
+                      <li className="flex items-center gap-2"><Check className="w-4 h-4 text-amber-500" /> Manager Executive Analytics</li>
+                    </ul>
+                  </div>
+                  <button
+                    onClick={() => setIsRegisterModalOpen(true)}
+                    className="mt-8 w-full py-3 rounded-xl font-black text-xs bg-gradient-to-r from-amber-600 to-amber-500 text-slate-950 shadow-lg hover:brightness-105 transition-all"
+                  >
+                    Start 14-Day Free Trial
+                  </button>
+                </div>
+
+                {/* Plan 3: Enterprise */}
+                <div className="p-6 rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col justify-between">
+                  <div>
+                    <h3 className="font-extrabold text-lg">Heritage Enterprise</h3>
+                    <p className="text-xs text-slate-500 mt-1">Multi-property hotel groups</p>
+                    <div className="mt-4 text-3xl font-black text-amber-500">
+                      ₹24,999<span className="text-xs font-normal text-slate-400">/mo</span>
+                    </div>
+                    <ul className="mt-6 space-y-2.5 text-xs text-slate-600 dark:text-slate-300">
+                      <li className="flex items-center gap-2"><Check className="w-4 h-4 text-amber-500" /> Dedicated Cloud Database Instance</li>
+                      <li className="flex items-center gap-2"><Check className="w-4 h-4 text-amber-500" /> Opera / PMS Direct Integration</li>
+                      <li className="flex items-center gap-2"><Check className="w-4 h-4 text-amber-500" /> Custom Domain & Brand Whitelabel</li>
+                    </ul>
+                  </div>
+                  <button
+                    onClick={() => setIsRegisterModalOpen(true)}
+                    className="mt-8 w-full py-2.5 rounded-xl font-bold text-xs bg-slate-100 dark:bg-slate-800 hover:bg-amber-500 hover:text-slate-950 transition-all"
+                  >
+                    Contact Enterprise Sales
+                  </button>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* Footer */}
+          <footer className="mt-auto py-8 border-t border-slate-200 dark:border-slate-800 text-center text-xs text-slate-500">
+            <p>© 2026 ResortBrain Inc. Engineered for Conclave 2026 with Multi-Tenant Architecture.</p>
+          </footer>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODE 2: LOGGED-IN HOTEL OPERATING DASHBOARD */}
+      {/* ========================================================================= */}
+      {viewMode === 'dashboard' && (
+        <div className="flex h-screen overflow-hidden">
+          {/* Dashboard Left Sidebar */}
+          <aside className="w-64 border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col justify-between p-4 flex-shrink-0">
+            <div className="space-y-6">
+              {/* Hotel Brand Header */}
+              <div className="flex items-center gap-3 pb-4 border-b border-slate-200 dark:border-slate-800">
+                <span className="w-9 h-9 rounded-xl bg-gradient-to-tr from-amber-600 to-amber-400 flex items-center justify-center font-extrabold text-slate-950 text-base shadow">
+                  RB
+                </span>
+                <div className="overflow-hidden">
+                  <div className="font-bold text-sm truncate">{currentHotel.name}</div>
+                  <div className="text-[11px] text-amber-500 font-semibold flex items-center gap-1">
+                    <Building className="w-3 h-3" /> Tenant: {currentHotel.slug}
+                  </div>
+                </div>
+              </div>
+
+              {/* Navigation Tabs */}
+              <div className="space-y-1 text-xs font-semibold">
+                <button
+                  onClick={() => setActiveTab('overview')}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl transition-all ${
+                    activeTab === 'overview'
+                      ? 'bg-amber-500 text-slate-950 font-bold shadow'
+                      : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  <SlidersHorizontal className="w-4 h-4" />
+                  <span>Executive Overview</span>
+                </button>
+
+                <button
+                  onClick={() => setActiveTab('kds')}
+                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl transition-all ${
+                    activeTab === 'kds'
+                      ? 'bg-amber-500 text-slate-950 font-bold shadow'
+                      : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <Utensils className="w-4 h-4" />
+                    <span>Kitchen Workspace</span>
+                  </div>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-amber-500/20 text-slate-900 dark:text-amber-300">
+                    {orders.filter((o) => o.status !== 'delivered').length}
+                  </span>
+                </button>
+
+                <button
+                  onClick={() => setActiveTab('desk')}
+                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl transition-all ${
+                    activeTab === 'desk'
+                      ? 'bg-amber-500 text-slate-950 font-bold shadow'
+                      : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <ConciergeBell className="w-4 h-4" />
+                    <span>Front Desk & Tasks</span>
+                  </div>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-blue-500/20 text-blue-500">
+                    {requests.filter((r) => r.status !== 'completed').length}
+                  </span>
+                </button>
+
+                <button
+                  onClick={() => setActiveTab('rooms')}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl transition-all ${
+                    activeTab === 'rooms'
+                      ? 'bg-amber-500 text-slate-950 font-bold shadow'
+                      : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  <QrCode className="w-4 h-4" />
+                  <span>Rooms & Bedside QRs</span>
+                </button>
+
+                <button
+                  onClick={() => setActiveTab('guest_preview')}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl transition-all ${
+                    activeTab === 'guest_preview'
+                      ? 'bg-amber-500 text-slate-950 font-bold shadow'
+                      : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  <Smartphone className="w-4 h-4" />
+                  <span>Live Guest PWA Sim</span>
+                </button>
+
+                <button
+                  onClick={() => setActiveTab('security')}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl transition-all ${
+                    activeTab === 'security'
+                      ? 'bg-amber-500 text-slate-950 font-bold shadow'
+                      : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  <ShieldCheck className="w-4 h-4" />
+                  <span>Security & Audit Logs</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Sidebar Bottom Controls */}
+            <div className="pt-4 border-t border-slate-200 dark:border-slate-800 space-y-3">
+              <div className="flex items-center justify-between text-xs">
+                <div className="flex items-center gap-2">
+                  <User className="w-4 h-4 text-amber-500" />
+                  <div>
+                    <div className="font-bold truncate max-w-[120px]">{loggedInUser?.name || 'Staff User'}</div>
+                    <div className="text-[10px] text-slate-400 capitalize">{loggedInUser?.role?.replace('_', ' ') || 'Manager'}</div>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setIsDark(!isDark)}
+                  className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800"
+                >
+                  {isDark ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
+                </button>
+              </div>
+
+              <button
+                onClick={() => setViewMode('landing')}
+                className="w-full py-2 rounded-xl text-xs font-bold border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 flex items-center justify-center gap-1.5"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span>Exit to SaaS Site</span>
+              </button>
+            </div>
+          </aside>
+
+          {/* Dashboard Main Content Area */}
+          <div className="flex-1 flex flex-col h-screen overflow-y-auto">
+            {/* Top Workspace Header */}
+            <header className="sticky top-0 z-30 border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#0f172a]/90 backdrop-blur-md px-6 py-3 flex items-center justify-between">
+              <div>
+                <h2 className="text-base font-extrabold capitalize">
+                  {activeTab === 'overview' && 'Executive Management Suite'}
+                  {activeTab === 'kds' && 'Kitchen Display System (KDS)'}
+                  {activeTab === 'desk' && 'Front Desk & Service Requests'}
+                  {activeTab === 'rooms' && 'Room Inventory & QR Codes'}
+                  {activeTab === 'guest_preview' && 'Guest PWA Mobile Experience'}
+                  {activeTab === 'security' && 'Tenant Isolation & Security Audit'}
+                </h2>
+                <p className="text-xs text-slate-500">Live for {currentHotel.name}</p>
+              </div>
+
+              <div className="flex items-center gap-3">
+                {/* Switch between seeded hotels or registered hotels */}
+                <select
+                  value={currentHotelId}
+                  onChange={(e) => setCurrentHotelId(e.target.value)}
+                  className="text-xs px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-bold focus:ring-1 focus:ring-amber-500"
+                >
+                  {hotelsList.map((h) => (
+                    <option key={h.id} value={h.id}>
+                      {h.name}
+                    </option>
+                  ))}
+                </select>
+
                 <button
                   onClick={() => playKitchenChime()}
                   className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-500/10 text-amber-500 border border-amber-500/30 flex items-center gap-1.5"
                 >
-                  <Bell className="w-3.5 h-3.5" /> Test Audio Chime
+                  <Bell className="w-3.5 h-3.5" />
+                  <span>Test Chime</span>
                 </button>
-                <span className="text-xs font-bold px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
-                  {orders.filter((o) => o.status !== 'delivered').length} Active Tickets
-                </span>
-              </div>
-            </div>
 
-            {/* Orders Queue Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-              {orders
-                .filter((o) => o.status !== 'delivered' && o.status !== 'cancelled')
-                .map((order) => (
-                  <div
-                    key={order.id}
-                    className="rounded-2xl border-2 border-amber-500/40 bg-white dark:bg-slate-900 p-5 shadow-lg flex flex-col justify-between"
-                  >
-                    <div>
-                      {/* Ticket Header */}
-                      <div className="flex items-start justify-between border-b pb-3 border-slate-200 dark:border-slate-800">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-black uppercase tracking-wider text-amber-500">
-                              {order.order_number}
-                            </span>
-                            <span className="text-xs px-2 py-0.5 rounded font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
-                              {order.room_number}
-                            </span>
-                          </div>
-                          <span className="text-[11px] text-slate-400">
-                            Ordered {new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                          </span>
-                        </div>
-                        <span
-                          className={`text-xs px-2.5 py-1 rounded-full font-bold uppercase tracking-wider ${
-                            order.status === 'pending'
-                              ? 'bg-amber-500/20 text-amber-500 animate-pulse'
-                              : order.status === 'accepted'
-                              ? 'bg-blue-500/20 text-blue-400'
-                              : order.status === 'preparing'
-                              ? 'bg-purple-500/20 text-purple-400'
-                              : 'bg-emerald-500/20 text-emerald-400'
-                          }`}
-                        >
-                          {order.status}
-                        </span>
-                      </div>
-
-                      {/* Items List */}
-                      <div className="py-4 space-y-2">
-                        {order.items.map((item, i) => (
-                          <div key={i} className="flex items-center justify-between text-sm font-semibold">
-                            <span>
-                              <span className="text-amber-500 font-black mr-2">{item.quantity}x</span>
-                              {item.itemName}
-                            </span>
-                            <span className="text-xs text-slate-400">₹{(item.totalPricePaise / 100).toFixed(0)}</span>
-                          </div>
-                        ))}
-
-                        {order.special_instructions && (
-                          <div className="mt-3 p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-300 text-xs">
-                            <span className="font-bold">Guest Note:</span> {order.special_instructions}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Status Mutation Action Buttons */}
-                    <div className="pt-3 border-t border-slate-200 dark:border-slate-800 flex gap-2">
-                      {order.status === 'pending' && (
-                        <button
-                          onClick={() => handleOrderTransition(order.id, 'accepted')}
-                          className="w-full py-2.5 rounded-xl font-black text-xs bg-amber-500 text-slate-950 hover:bg-amber-400 transition-colors shadow"
-                        >
-                          Accept Ticket
-                        </button>
-                      )}
-                      {order.status === 'accepted' && (
-                        <button
-                          onClick={() => handleOrderTransition(order.id, 'preparing')}
-                          className="w-full py-2.5 rounded-xl font-black text-xs bg-blue-600 text-white hover:bg-blue-500 transition-colors shadow"
-                        >
-                          Start Preparing
-                        </button>
-                      )}
-                      {order.status === 'preparing' && (
-                        <button
-                          onClick={() => handleOrderTransition(order.id, 'ready')}
-                          className="w-full py-2.5 rounded-xl font-black text-xs bg-purple-600 text-white hover:bg-purple-500 transition-colors shadow"
-                        >
-                          Mark Ready for Runner
-                        </button>
-                      )}
-                      {order.status === 'ready' && (
-                        <button
-                          onClick={() => handleOrderTransition(order.id, 'delivered')}
-                          className="w-full py-2.5 rounded-xl font-black text-xs bg-emerald-600 text-white hover:bg-emerald-500 transition-colors shadow"
-                        >
-                          Confirm Delivered
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-            </div>
-          </div>
-        )}
-
-        {/* ========================================================================= */}
-        {/* VIEW 3: FRONT DESK & HOUSEKEEPING */}
-        {/* ========================================================================= */}
-        {workspace === 'desk' && (
-          <div className="space-y-6">
-            <div className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60">
-              <div>
-                <h2 className="text-xl font-extrabold flex items-center gap-2">
-                  <ConciergeBell className="w-5 h-5 text-amber-500" />
-                  Front Desk & Housekeeping Service Hub
-                </h2>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Guest requests with SLA countdown timers • Auto-escalation triggered if SLA exceeded
-                </p>
-              </div>
-              <span className="text-xs font-bold px-3 py-1 rounded-full bg-blue-500/10 text-blue-500 border border-blue-500/20">
-                {requests.filter((r) => r.status !== 'completed').length} Pending Tasks
-              </span>
-            </div>
-
-            {/* Requests Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-              {requests.map((req) => (
-                <div
-                  key={req.id}
-                  className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm flex flex-col justify-between"
+                <button
+                  onClick={refreshData}
+                  className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-white"
+                  title="Refresh"
                 >
-                  <div>
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <span className="text-xs px-2.5 py-0.5 rounded font-bold uppercase tracking-wider bg-slate-100 dark:bg-slate-800 text-amber-500">
-                          {req.room_number} • {req.category}
-                        </span>
-                        <h4 className="font-extrabold text-base mt-2">{req.title}</h4>
-                      </div>
-                      <span
-                        className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${
-                          req.priority === 'urgent'
-                            ? 'bg-rose-500 text-white'
-                            : 'bg-amber-500/20 text-amber-500'
-                        }`}
-                      >
-                        {req.priority}
-                      </span>
+                  <RefreshCw className="w-4 h-4" />
+                </button>
+              </div>
+            </header>
+
+            {/* Dashboard Sub-Tab Content */}
+            <div className="p-6 max-w-7xl mx-auto w-full space-y-6">
+              {/* TAB 1: OVERVIEW */}
+              {activeTab === 'overview' && (
+                <div className="space-y-6">
+                  {/* KPI Cards */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="p-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
+                      <span className="text-xs font-semibold text-slate-400">Total Revenue (Today)</span>
+                      <div className="text-2xl font-black text-amber-500 mt-1">₹1,84,500.00</div>
+                      <span className="text-[11px] text-emerald-500 font-bold">↑ 18.2% vs last week</span>
                     </div>
 
-                    <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{req.details}</p>
+                    <div className="p-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
+                      <span className="text-xs font-semibold text-slate-400">Active Kitchen Tickets</span>
+                      <div className="text-2xl font-black text-slate-800 dark:text-slate-100 mt-1">
+                        {orders.filter((o) => o.status !== 'delivered').length} Active
+                      </div>
+                      <span className="text-[11px] text-amber-500 font-bold">Avg prep time: 11.4 mins</span>
+                    </div>
 
-                    <div className="mt-3 flex items-center gap-3 text-xs text-slate-400">
-                      <span className="flex items-center gap-1">
-                        <Clock className="w-3.5 h-3.5 text-amber-500" /> SLA: {req.sla_minutes}m target
-                      </span>
-                      {req.assigned_name && (
-                        <span className="font-medium text-slate-300">Assigned: {req.assigned_name}</span>
-                      )}
+                    <div className="p-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
+                      <span className="text-xs font-semibold text-slate-400">SLA Adherence Rate</span>
+                      <div className="text-2xl font-black text-emerald-500 mt-1">98.6%</div>
+                      <span className="text-[11px] text-slate-400">1 escalation resolved today</span>
+                    </div>
+
+                    <div className="p-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
+                      <span className="text-xs font-semibold text-slate-400">Occupancy Rate</span>
+                      <div className="text-2xl font-black text-slate-800 dark:text-slate-100 mt-1">87.5%</div>
+                      <span className="text-[11px] text-amber-500 font-bold">High season volume</span>
                     </div>
                   </div>
 
-                  <div className="pt-4 border-t border-slate-200 dark:border-slate-800 flex gap-2">
-                    {req.status === 'created' && (
-                      <button
-                        onClick={() => handleRequestTransition(req.id, 'acknowledged')}
-                        className="w-full py-2 rounded-xl font-bold text-xs bg-amber-500 text-slate-950 hover:bg-amber-400 transition-colors"
-                      >
-                        Acknowledge & Assign
+                  {/* Recent Activity Table */}
+                  <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-sm">
+                    <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                      <h3 className="font-bold text-sm">Live Order Pipeline</h3>
+                      <button onClick={() => setActiveTab('kds')} className="text-xs text-amber-500 font-bold flex items-center gap-1">
+                        Open Full KDS <ArrowRight className="w-3.5 h-3.5" />
                       </button>
-                    )}
-                    {req.status === 'acknowledged' && (
-                      <button
-                        onClick={() => handleRequestTransition(req.id, 'in_progress')}
-                        className="w-full py-2 rounded-xl font-bold text-xs bg-blue-600 text-white hover:bg-blue-500 transition-colors"
-                      >
-                        Start Task
-                      </button>
-                    )}
-                    {req.status === 'in_progress' && (
-                      <button
-                        onClick={() => handleRequestTransition(req.id, 'completed')}
-                        className="w-full py-2 rounded-xl font-bold text-xs bg-emerald-600 text-white hover:bg-emerald-500 transition-colors"
-                      >
-                        Mark Completed
-                      </button>
-                    )}
-                    {req.status === 'completed' && (
-                      <div className="w-full py-2 text-center text-xs font-bold text-emerald-500 flex items-center justify-center gap-1.5">
-                        <CheckCircle2 className="w-4 h-4" /> Resolved
-                      </div>
-                    )}
+                    </div>
+
+                    <div className="divide-y divide-slate-100 dark:divide-slate-800/80">
+                      {orders.slice(0, 5).map((order) => (
+                        <div key={order.id} className="p-4 flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <span className="w-8 h-8 rounded-lg bg-amber-500/10 text-amber-500 flex items-center justify-center font-black text-xs">
+                              {order.room_number.split(' ')[1] || 'RM'}
+                            </span>
+                            <div>
+                              <div className="font-bold text-sm">{order.order_number} • {order.room_number}</div>
+                              <div className="text-xs text-slate-400">
+                                {order.items.map((i) => `${i.quantity}x ${i.itemName}`).join(', ')}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-3">
+                            <span className="font-bold text-sm">₹{(order.total_paise / 100).toFixed(2)}</span>
+                            <span className="text-xs px-2.5 py-0.5 rounded-full font-bold uppercase bg-amber-500/10 text-amber-500">
+                              {order.status}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
-              ))}
-            </div>
-          </div>
-        )}
+              )}
 
-        {/* ========================================================================= */}
-        {/* VIEW 4: MANAGER EXECUTIVE SUITE */}
-        {/* ========================================================================= */}
-        {workspace === 'manager' && (
-          <div className="space-y-6">
-            <div className="p-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60">
-              <h2 className="text-xl font-extrabold flex items-center gap-2">
-                <SlidersHorizontal className="w-5 h-5 text-amber-500" />
-                Executive Operations & Revenue Dashboard
-              </h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                Live performance metrics for General Manager Vikram Oberoi • Multi-department velocity
-              </p>
-            </div>
+              {/* TAB 2: KITCHEN WORKSPACE */}
+              {activeTab === 'kds' && (
+                <div className="space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                    {orders
+                      .filter((o) => o.status !== 'delivered' && o.status !== 'cancelled')
+                      .map((order) => (
+                        <div
+                          key={order.id}
+                          className="rounded-2xl border-2 border-amber-500/40 bg-white dark:bg-slate-900 p-5 shadow-lg flex flex-col justify-between"
+                        >
+                          <div>
+                            <div className="flex items-start justify-between border-b pb-3 border-slate-200 dark:border-slate-800">
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs font-black uppercase tracking-wider text-amber-500">
+                                    {order.order_number}
+                                  </span>
+                                  <span className="text-xs px-2 py-0.5 rounded font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                                    {order.room_number}
+                                  </span>
+                                </div>
+                                <span className="text-[11px] text-slate-400">
+                                  Ordered {new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                              </div>
+                              <span className="text-xs px-2.5 py-1 rounded-full font-bold uppercase bg-amber-500/20 text-amber-500">
+                                {order.status}
+                              </span>
+                            </div>
 
-            {/* KPI Tiles */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="p-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
-                <span className="text-xs font-semibold text-slate-400">Total F&B Revenue</span>
-                <div className="text-2xl font-black text-amber-500 mt-1">₹1,84,500.00</div>
-                <span className="text-[11px] text-emerald-500 font-bold">↑ 18.2% vs last week</span>
-              </div>
+                            <div className="py-4 space-y-2">
+                              {order.items.map((item, i) => (
+                                <div key={i} className="flex items-center justify-between text-sm font-semibold">
+                                  <span>
+                                    <span className="text-amber-500 font-black mr-2">{item.quantity}x</span>
+                                    {item.itemName}
+                                  </span>
+                                  <span className="text-xs text-slate-400">₹{(item.totalPricePaise / 100).toFixed(0)}</span>
+                                </div>
+                              ))}
+                              {order.special_instructions && (
+                                <div className="mt-3 p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-300 text-xs">
+                                  <span className="font-bold">Guest Note:</span> {order.special_instructions}
+                                </div>
+                              )}
+                            </div>
+                          </div>
 
-              <div className="p-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
-                <span className="text-xs font-semibold text-slate-400">Avg Kitchen Prep Time</span>
-                <div className="text-2xl font-black text-slate-800 dark:text-slate-100 mt-1">11.4 mins</div>
-                <span className="text-[11px] text-emerald-500 font-bold">Target &lt; 15 mins (Passing)</span>
-              </div>
+                          <div className="pt-3 border-t border-slate-200 dark:border-slate-800 flex gap-2">
+                            {order.status === 'pending' && (
+                              <button
+                                onClick={() => handleOrderTransition(order.id, 'accepted')}
+                                className="w-full py-2.5 rounded-xl font-black text-xs bg-amber-500 text-slate-950 hover:bg-amber-400 transition-colors shadow"
+                              >
+                                Accept Ticket
+                              </button>
+                            )}
+                            {order.status === 'accepted' && (
+                              <button
+                                onClick={() => handleOrderTransition(order.id, 'preparing')}
+                                className="w-full py-2.5 rounded-xl font-black text-xs bg-blue-600 text-white hover:bg-blue-500 transition-colors shadow"
+                              >
+                                Start Cooking
+                              </button>
+                            )}
+                            {order.status === 'preparing' && (
+                              <button
+                                onClick={() => handleOrderTransition(order.id, 'ready')}
+                                className="w-full py-2.5 rounded-xl font-black text-xs bg-purple-600 text-white hover:bg-purple-500 transition-colors shadow"
+                              >
+                                Mark Ready
+                              </button>
+                            )}
+                            {order.status === 'ready' && (
+                              <button
+                                onClick={() => handleOrderTransition(order.id, 'delivered')}
+                                className="w-full py-2.5 rounded-xl font-black text-xs bg-emerald-600 text-white hover:bg-emerald-500 transition-colors shadow"
+                              >
+                                Confirm Delivered
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              )}
 
-              <div className="p-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
-                <span className="text-xs font-semibold text-slate-400">SLA Adherence Rate</span>
-                <div className="text-2xl font-black text-emerald-500 mt-1">98.6%</div>
-                <span className="text-[11px] text-slate-400">1 escalation resolved today</span>
-              </div>
+              {/* TAB 3: FRONT DESK & HOUSEKEEPING */}
+              {activeTab === 'desk' && (
+                <div className="space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                    {requests.map((req) => (
+                      <div
+                        key={req.id}
+                        className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm flex flex-col justify-between"
+                      >
+                        <div>
+                          <div className="flex items-start justify-between">
+                            <div>
+                              <span className="text-xs px-2.5 py-0.5 rounded font-bold uppercase tracking-wider bg-slate-100 dark:bg-slate-800 text-amber-500">
+                                {req.room_number} • {req.category}
+                              </span>
+                              <h4 className="font-extrabold text-base mt-2">{req.title}</h4>
+                            </div>
+                            <span className="text-[10px] px-2 py-0.5 rounded-full font-bold uppercase bg-amber-500/20 text-amber-500">
+                              {req.priority}
+                            </span>
+                          </div>
+                          <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{req.details}</p>
+                          <div className="mt-3 flex items-center gap-3 text-xs text-slate-400">
+                            <span className="flex items-center gap-1">
+                              <Clock className="w-3.5 h-3.5 text-amber-500" /> SLA: {req.sla_minutes}m target
+                            </span>
+                            {req.assigned_name && <span className="text-slate-300">Assigned: {req.assigned_name}</span>}
+                          </div>
+                        </div>
 
-              <div className="p-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
-                <span className="text-xs font-semibold text-slate-400">Active Room Occupancy</span>
-                <div className="text-2xl font-black text-slate-800 dark:text-slate-100 mt-1">87.5%</div>
-                <span className="text-[11px] text-amber-500 font-bold">28 of 32 rooms occupied</span>
-              </div>
-            </div>
-          </div>
-        )}
+                        <div className="pt-4 border-t border-slate-200 dark:border-slate-800 flex gap-2">
+                          {req.status === 'created' && (
+                            <button
+                              onClick={() => handleRequestTransition(req.id, 'acknowledged')}
+                              className="w-full py-2 rounded-xl font-bold text-xs bg-amber-500 text-slate-950 hover:bg-amber-400 transition-colors"
+                            >
+                              Acknowledge & Assign
+                            </button>
+                          )}
+                          {req.status === 'acknowledged' && (
+                            <button
+                              onClick={() => handleRequestTransition(req.id, 'in_progress')}
+                              className="w-full py-2 rounded-xl font-bold text-xs bg-blue-600 text-white hover:bg-blue-500 transition-colors"
+                            >
+                              Start Task
+                            </button>
+                          )}
+                          {req.status === 'in_progress' && (
+                            <button
+                              onClick={() => handleRequestTransition(req.id, 'completed')}
+                              className="w-full py-2 rounded-xl font-bold text-xs bg-emerald-600 text-white hover:bg-emerald-500 transition-colors"
+                            >
+                              Mark Completed
+                            </button>
+                          )}
+                          {req.status === 'completed' && (
+                            <div className="w-full py-2 text-center text-xs font-bold text-emerald-500 flex items-center justify-center gap-1.5">
+                              <CheckCircle2 className="w-4 h-4" /> Resolved
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
-        {/* ========================================================================= */}
-        {/* VIEW 5: SECURITY & AUDIT TRAIL (MEMBER 1 PLATFORM LEAD) */}
-        {/* ========================================================================= */}
-        {workspace === 'security' && (
-          <div className="space-y-6">
-            <div className="p-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-gradient-to-r from-emerald-950/40 to-slate-900 border-l-4 border-l-emerald-500">
-              <h2 className="text-xl font-extrabold flex items-center gap-2">
-                <ShieldCheck className="w-5 h-5 text-emerald-400" />
-                Platform Tenant Isolation & Security Audit
-              </h2>
-              <p className="text-xs text-slate-400 mt-1">
-                Proves Row-Level Security (RLS) enforcement. Attackers or malicious clients attempting cross-tenant access are strictly blocked with append-only audit tracking.
-              </p>
+              {/* TAB 4: ROOMS & QR CODES */}
+              {activeTab === 'rooms' && (
+                <div className="space-y-6">
+                  <div className="p-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm flex flex-wrap items-center justify-between gap-4">
+                    <div>
+                      <h3 className="font-extrabold text-base">Room Inventory & Guest QR Codes</h3>
+                      <p className="text-xs text-slate-500">
+                        Print bedside QR codes for each villa. Guests scan with iPhone or Android camera to access their stay.
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => window.print()}
+                      className="px-4 py-2 rounded-xl text-xs font-bold bg-amber-500 text-slate-950 shadow flex items-center gap-1.5"
+                    >
+                      <Printer className="w-3.5 h-3.5" /> Print All QR Standees
+                    </button>
+                  </div>
 
-              <div className="mt-4 flex flex-wrap items-center gap-3">
-                <button
-                  onClick={handleSimulateCrossTenantBreach}
-                  className="px-4 py-2 rounded-xl text-xs font-black bg-rose-600 hover:bg-rose-500 text-white transition-all shadow-md flex items-center gap-2"
-                >
-                  <AlertTriangle className="w-4 h-4" />
-                  Run Simulated Cross-Tenant Intrusion Test
-                </button>
-              </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    {[
+                      { room: 'Room 101', type: 'Ocean Villa', qr: `QR_${currentHotel.slug.toUpperCase()}_101` },
+                      { room: 'Room 102', type: 'Royal Suite', qr: `QR_${currentHotel.slug.toUpperCase()}_102` },
+                      { room: 'Room 204', type: 'Garden Villa', qr: `QR_${currentHotel.slug.toUpperCase()}_204` },
+                      { room: 'Room 304', type: 'Deluxe Suite', qr: `QR_${currentHotel.slug.toUpperCase()}_304` },
+                    ].map((rm, idx) => (
+                      <div
+                        key={idx}
+                        className="p-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-center space-y-3 shadow-sm"
+                      >
+                        <div className="w-28 h-28 mx-auto bg-slate-100 dark:bg-slate-800 rounded-xl flex items-center justify-center border-2 border-dashed border-amber-500/50 p-2">
+                          <QrCode className="w-20 h-20 text-slate-800 dark:text-amber-400" />
+                        </div>
+                        <div>
+                          <div className="font-extrabold text-base">{rm.room}</div>
+                          <div className="text-xs text-slate-400">{rm.type}</div>
+                          <div className="font-mono text-[10px] text-amber-500 mt-1">{rm.qr}</div>
+                        </div>
+                        <button
+                          onClick={() => setActiveTab('guest_preview')}
+                          className="w-full py-2 rounded-xl text-xs font-bold border border-slate-200 dark:border-slate-700 hover:border-amber-500 flex items-center justify-center gap-1"
+                        >
+                          <Smartphone className="w-3.5 h-3.5" /> Launch Guest View
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
-              {securitySimulationMsg && (
-                <div className="mt-3 p-3 rounded-xl bg-slate-900 border border-slate-700 text-xs font-mono text-emerald-400">
-                  {securitySimulationMsg}
+              {/* TAB 5: GUEST PWA SIMULATOR */}
+              {activeTab === 'guest_preview' && (
+                <div className="space-y-6">
+                  {/* Guest Top Card */}
+                  <div className="rounded-2xl p-6 border border-slate-200 dark:border-slate-800 bg-gradient-to-r from-slate-900 to-slate-950 text-white shadow-xl">
+                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/20 text-amber-400 text-xs font-bold uppercase tracking-wider mb-2 border border-amber-500/30">
+                      <KeyRound className="w-3.5 h-3.5" /> Room 304 • Active Guest Stay
+                    </div>
+                    <h3 className="text-2xl font-black">{currentHotel.name}</h3>
+                    <p className="text-xs text-slate-300 mt-1">Guest: Dr. Siddharth Verma</p>
+
+                    <div className="mt-4 flex flex-wrap gap-2.5">
+                      <button
+                        onClick={() => setIsRequestModalOpen(true)}
+                        className="px-4 py-2 rounded-xl text-xs font-bold bg-white/10 hover:bg-white/20 border border-white/20 text-white flex items-center gap-1.5"
+                      >
+                        <ConciergeBell className="w-4 h-4 text-amber-400" />
+                        Request Service / Towels
+                      </button>
+                      <button
+                        onClick={() => setIsBillOpen(true)}
+                        className="px-4 py-2 rounded-xl text-xs font-extrabold bg-amber-500 hover:bg-amber-400 text-slate-950 shadow flex items-center gap-1.5"
+                      >
+                        <Receipt className="w-4 h-4" />
+                        View Room Folio & Checkout
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Menu Grid */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                    {filteredItems.map((item) => {
+                      const inCartQty = cart[item.id] || 0;
+                      return (
+                        <div
+                          key={item.id}
+                          className="group rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/70 hover:shadow-lg transition-all flex flex-col justify-between"
+                        >
+                          <div>
+                            <div className="relative h-44 w-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={item.image_url}
+                                alt={item.name}
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                              />
+                            </div>
+                            <div className="p-4">
+                              <div className="flex items-start justify-between gap-2">
+                                <h4 className="font-bold text-base leading-snug group-hover:text-amber-500 transition-colors">
+                                  {item.name}
+                                </h4>
+                                <span className="font-extrabold text-amber-500 whitespace-nowrap">
+                                  ₹{(item.price_paise / 100).toFixed(2)}
+                                </span>
+                              </div>
+                              <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400 line-clamp-2">
+                                {item.description}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="p-4 pt-0">
+                            {inCartQty === 0 ? (
+                              <button
+                                onClick={() => addToCart(item.id)}
+                                className="w-full py-2.5 rounded-xl font-bold text-xs bg-slate-100 dark:bg-slate-800 hover:bg-amber-500 hover:text-slate-950 text-slate-700 dark:text-slate-200 transition-all flex items-center justify-center gap-1.5"
+                              >
+                                <Plus className="w-3.5 h-3.5" /> Add to Order
+                              </button>
+                            ) : (
+                              <div className="flex items-center justify-between bg-amber-500/10 border border-amber-500/30 rounded-xl p-1">
+                                <button
+                                  onClick={() => removeFromCart(item.id)}
+                                  className="w-8 h-8 rounded-lg bg-amber-500 text-slate-950 flex items-center justify-center font-bold"
+                                >
+                                  <Minus className="w-3.5 h-3.5" />
+                                </button>
+                                <span className="font-extrabold text-sm text-amber-500">{inCartQty} in cart</span>
+                                <button
+                                  onClick={() => addToCart(item.id)}
+                                  className="w-8 h-8 rounded-lg bg-amber-500 text-slate-950 flex items-center justify-center font-bold"
+                                >
+                                  <Plus className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Floating Cart Button */}
+                  {cartItemsCount > 0 && (
+                    <div className="fixed bottom-6 right-6 z-30">
+                      <button
+                        onClick={() => setIsCartOpen(true)}
+                        className="px-5 py-3 rounded-full bg-gradient-to-r from-amber-600 to-amber-500 text-slate-950 font-extrabold shadow-2xl flex items-center gap-3 hover:scale-105 transition-all text-sm"
+                      >
+                        <ShoppingBag className="w-5 h-5" />
+                        <span>
+                          {cartItemsCount} items • ₹{(cartTotalPaise / 100).toFixed(2)}
+                        </span>
+                        <ChevronRight className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* TAB 6: SECURITY & AUDIT TRAIL */}
+              {activeTab === 'security' && (
+                <div className="space-y-6">
+                  <div className="p-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-gradient-to-r from-emerald-950/40 to-slate-900 border-l-4 border-l-emerald-500">
+                    <h3 className="text-lg font-extrabold flex items-center gap-2">
+                      <ShieldCheck className="w-5 h-5 text-emerald-400" />
+                      Cross-Tenant Row-Level Security Verification
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-1">
+                      Prove to judges that Hotel A cannot mutate or read Hotel B data. Click the button below to execute a simulated breach.
+                    </p>
+
+                    <div className="mt-4">
+                      <button
+                        onClick={handleSimulateCrossTenantBreach}
+                        className="px-4 py-2 rounded-xl text-xs font-black bg-rose-600 hover:bg-rose-500 text-white transition-all shadow-md flex items-center gap-2"
+                      >
+                        <AlertTriangle className="w-4 h-4" />
+                        Execute Simulated Cross-Tenant Attack
+                      </button>
+                    </div>
+
+                    {securitySimulationMsg && (
+                      <div className="mt-3 p-3 rounded-xl bg-slate-900 border border-slate-700 text-xs font-mono text-emerald-400">
+                        {securitySimulationMsg}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Audit Logs */}
+                  <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-sm">
+                    <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                      <h3 className="font-bold text-sm">Real-time Append-Only Audit Stream</h3>
+                      <span className="text-xs text-slate-400">{auditLogs.length} events logged</span>
+                    </div>
+
+                    <div className="divide-y divide-slate-100 dark:divide-slate-800/80 max-h-96 overflow-y-auto font-mono text-xs">
+                      {auditLogs.map((log) => (
+                        <div key={log.id} className="p-3.5 hover:bg-slate-50 dark:hover:bg-slate-800/50 flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex items-center gap-3">
+                            <span className="text-slate-400 text-[11px]">{new Date(log.created_at).toLocaleTimeString()}</span>
+                            <span className="px-2 py-0.5 rounded font-bold bg-amber-500/10 text-amber-500 text-[10px] uppercase">
+                              {log.actor_role}
+                            </span>
+                            <span className="font-bold text-slate-800 dark:text-slate-200">{log.action}</span>
+                            <span className="text-slate-500">→ {log.target_resource}</span>
+                          </div>
+                          <span className="text-[10px] text-slate-500">trace:{log.trace_id}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
+          </div>
+        </div>
+      )}
 
-            {/* Audit Log Stream */}
-            <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-sm">
-              <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
-                <h3 className="font-bold text-sm">Real-time Append-Only Audit Stream</h3>
-                <span className="text-xs text-slate-400">{auditLogs.length} events logged</span>
+      {/* ========================================================================= */}
+      {/* MODALS */}
+      {/* ========================================================================= */}
+
+      {/* 1. HOTEL REGISTRATION / ONBOARDING MODAL */}
+      {isRegisterModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md">
+          <div className="w-full max-w-lg bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 border border-slate-200 dark:border-slate-800 shadow-2xl space-y-5">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
+              <div className="flex items-center gap-2.5">
+                <span className="w-8 h-8 rounded-lg bg-amber-500 flex items-center justify-center font-black text-slate-950">
+                  <Building className="w-4 h-4" />
+                </span>
+                <div>
+                  <h3 className="font-black text-lg">Onboard Your Hotel</h3>
+                  <p className="text-xs text-slate-500">Create new multi-tenant instance</p>
+                </div>
+              </div>
+              <button onClick={() => setIsRegisterModalOpen(false)} className="text-slate-400 hover:text-white">✕</button>
+            </div>
+
+            <form onSubmit={handleRegisterSubmit} className="space-y-4 text-xs">
+              {regError && (
+                <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-500 font-bold">
+                  {regError}
+                </div>
+              )}
+
+              <div>
+                <label className="font-bold text-slate-700 dark:text-slate-300">Hotel / Resort Name</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Taj Lake Palace, Udaipur"
+                  value={regName}
+                  onChange={(e) => {
+                    setRegName(e.target.value);
+                    if (!regSlug) setRegSlug(e.target.value.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-'));
+                  }}
+                  className="w-full mt-1 px-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:ring-1 focus:ring-amber-500"
+                />
               </div>
 
-              <div className="divide-y divide-slate-100 dark:divide-slate-800/80 max-h-96 overflow-y-auto font-mono text-xs">
-                {auditLogs.map((log) => (
-                  <div key={log.id} className="p-3.5 hover:bg-slate-50 dark:hover:bg-slate-800/50 flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex items-center gap-3">
-                      <span className="text-slate-400 text-[11px]">
-                        {new Date(log.created_at).toLocaleTimeString()}
-                      </span>
-                      <span className="px-2 py-0.5 rounded font-bold bg-amber-500/10 text-amber-500 text-[10px] uppercase">
-                        {log.actor_role}
-                      </span>
-                      <span className="font-bold text-slate-800 dark:text-slate-200">{log.action}</span>
-                      <span className="text-slate-500">→ {log.target_resource}</span>
-                    </div>
-                    <span className="text-[10px] text-slate-500">trace:{log.trace_id}</span>
-                  </div>
-                ))}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="font-bold text-slate-700 dark:text-slate-300">Tenant Slug (Identifier)</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. taj-lake"
+                    value={regSlug}
+                    onChange={(e) => setRegSlug(e.target.value)}
+                    className="w-full mt-1 px-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="font-bold text-slate-700 dark:text-slate-300">Room Count</label>
+                  <input
+                    type="number"
+                    required
+                    min={1}
+                    max={500}
+                    value={regRoomsCount}
+                    onChange={(e) => setRegRoomsCount(Number(e.target.value))}
+                    className="w-full mt-1 px-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700"
+                  />
+                </div>
               </div>
+
+              <div>
+                <label className="font-bold text-slate-700 dark:text-slate-300">Tagline / Location</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Regal Island Palace & Luxury Dining"
+                  value={regTagline}
+                  onChange={(e) => setRegTagline(e.target.value)}
+                  className="w-full mt-1 px-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="font-bold text-slate-700 dark:text-slate-300">General Manager Name</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Sanjeev Kapoor"
+                    value={regManagerName}
+                    onChange={(e) => setRegManagerName(e.target.value)}
+                    className="w-full mt-1 px-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700"
+                  />
+                </div>
+                <div>
+                  <label className="font-bold text-slate-700 dark:text-slate-300">Manager Email</label>
+                  <input
+                    type="email"
+                    required
+                    placeholder="gm@tajhotels.com"
+                    value={regManagerEmail}
+                    onChange={(e) => setRegManagerEmail(e.target.value)}
+                    className="w-full mt-1 px-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700"
+                  />
+                </div>
+              </div>
+
+              <div className="pt-3">
+                <button
+                  type="submit"
+                  disabled={regLoading}
+                  className="w-full py-3.5 rounded-xl font-black text-sm bg-gradient-to-r from-amber-600 to-amber-500 text-slate-950 shadow-xl hover:brightness-105 transition-all flex items-center justify-center gap-2"
+                >
+                  {regLoading ? 'Provisioning Hotel Instance...' : 'Create Hotel Tenant & Launch Dashboard'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 2. STAFF & MANAGER LOGIN MODAL */}
+      {isLoginModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md">
+          <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 border border-slate-200 dark:border-slate-800 shadow-2xl space-y-5">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
+              <h3 className="font-black text-lg flex items-center gap-2">
+                <KeyRound className="w-5 h-5 text-amber-500" />
+                Staff & Manager Login
+              </h3>
+              <button onClick={() => setIsLoginModalOpen(false)} className="text-slate-400 hover:text-white">✕</button>
+            </div>
+
+            <p className="text-xs text-slate-500">
+              Select a pre-configured role to immediately enter that workspace or test role-based access:
+            </p>
+
+            <div className="space-y-3 pt-2">
+              <button
+                onClick={() => handleQuickLogin('manager', 'hotel-001')}
+                className="w-full p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 hover:border-amber-500 bg-slate-50 dark:bg-slate-800/60 hover:bg-amber-500/10 transition-all text-left flex items-center justify-between group"
+              >
+                <div>
+                  <div className="font-bold text-sm group-hover:text-amber-500">Vikram Oberoi (General Manager)</div>
+                  <div className="text-xs text-slate-400">Grand Azure Resort • Executive Suite</div>
+                </div>
+                <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-amber-500" />
+              </button>
+
+              <button
+                onClick={() => handleQuickLogin('chef', 'hotel-001')}
+                className="w-full p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 hover:border-amber-500 bg-slate-50 dark:bg-slate-800/60 hover:bg-amber-500/10 transition-all text-left flex items-center justify-between group"
+              >
+                <div>
+                  <div className="font-bold text-sm group-hover:text-amber-500">Chef Marco Bellini (Kitchen Chef)</div>
+                  <div className="text-xs text-slate-400">Grand Azure Resort • Kitchen Display (KDS)</div>
+                </div>
+                <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-amber-500" />
+              </button>
+
+              <button
+                onClick={() => handleQuickLogin('desk', 'hotel-001')}
+                className="w-full p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 hover:border-amber-500 bg-slate-50 dark:bg-slate-800/60 hover:bg-amber-500/10 transition-all text-left flex items-center justify-between group"
+              >
+                <div>
+                  <div className="font-bold text-sm group-hover:text-amber-500">Priya Sharma (Front Desk Lead)</div>
+                  <div className="text-xs text-slate-400">Grand Azure Resort • Task & SLA Queue</div>
+                </div>
+                <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-amber-500" />
+              </button>
+
+              <button
+                onClick={() => handleQuickLogin('manager', 'hotel-002')}
+                className="w-full p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 hover:border-amber-500 bg-slate-50 dark:bg-slate-800/60 hover:bg-amber-500/10 transition-all text-left flex items-center justify-between group"
+              >
+                <div>
+                  <div className="font-bold text-sm group-hover:text-amber-500">Alok Nath (GM - The Heritage Palace)</div>
+                  <div className="text-xs text-slate-400">Heritage Palace (Hotel B) • Multi-Tenant Test</div>
+                </div>
+                <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-amber-500" />
+              </button>
             </div>
           </div>
-        )}
-      </main>
+        </div>
+      )}
 
       {/* Cart Drawer */}
       {isCartOpen && (
@@ -1060,15 +1551,9 @@ export default function ResortBrainApp() {
                   <ShoppingBag className="w-5 h-5 text-amber-500" />
                   Your Dining Cart
                 </h3>
-                <button
-                  onClick={() => setIsCartOpen(false)}
-                  className="p-1 rounded-lg text-slate-400 hover:text-white"
-                >
-                  ✕
-                </button>
+                <button onClick={() => setIsCartOpen(false)} className="p-1 rounded-lg text-slate-400 hover:text-white">✕</button>
               </div>
 
-              {/* Items */}
               <div className="py-4 space-y-3 max-h-[50vh] overflow-y-auto">
                 {Object.entries(cart).map(([id, qty]) => {
                   const item = menuItems.find((m) => m.id === id);
@@ -1077,9 +1562,7 @@ export default function ResortBrainApp() {
                     <div key={id} className="flex items-center justify-between">
                       <div>
                         <div className="font-bold text-sm">{item.name}</div>
-                        <div className="text-xs text-amber-500 font-bold">
-                          ₹{((item.price_paise * qty) / 100).toFixed(2)}
-                        </div>
+                        <div className="text-xs text-amber-500 font-bold">₹{((item.price_paise * qty) / 100).toFixed(2)}</div>
                       </div>
                       <div className="flex items-center gap-2">
                         <button
@@ -1101,20 +1584,18 @@ export default function ResortBrainApp() {
                 })}
               </div>
 
-              {/* Special Request */}
               <div className="mt-2">
-                <label className="text-xs font-bold text-slate-400">Special Culinary Instructions</label>
+                <label className="text-xs font-bold text-slate-400">Special Instructions</label>
                 <input
                   type="text"
-                  placeholder="e.g. Mild spice, extra napkins, serve warm"
+                  placeholder="e.g. Mild spice, extra napkins"
                   value={specialNote}
                   onChange={(e) => setSpecialNote(e.target.value)}
-                  className="w-full mt-1 px-3 py-2 rounded-xl text-xs bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                  className="w-full mt-1 px-3 py-2 rounded-xl text-xs bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700"
                 />
               </div>
             </div>
 
-            {/* Total & Checkout */}
             <div className="pt-4 border-t border-slate-200 dark:border-slate-800 space-y-3">
               <div className="space-y-1 text-xs">
                 <div className="flex justify-between text-slate-400">
@@ -1122,7 +1603,7 @@ export default function ResortBrainApp() {
                   <span>₹{(cartTotalPaise / 100).toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between text-slate-400">
-                  <span>GST Tax (18% Server Computed)</span>
+                  <span>GST (18% Server Calculated)</span>
                   <span>₹{((cartTotalPaise * 0.18) / 100).toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between font-extrabold text-sm pt-2 border-t border-slate-200 dark:border-slate-800">
@@ -1135,7 +1616,7 @@ export default function ResortBrainApp() {
                 onClick={handlePlaceOrder}
                 className="w-full py-3.5 rounded-xl font-black text-sm bg-gradient-to-r from-amber-600 to-amber-500 text-slate-950 hover:brightness-105 shadow-xl transition-all"
               >
-                Confirm & Place Order to Kitchen
+                Place Order to Kitchen
               </button>
             </div>
           </div>
@@ -1145,8 +1626,8 @@ export default function ResortBrainApp() {
       {/* Service Request Modal */}
       {isRequestModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-2xl p-6 border border-slate-200 dark:border-slate-800 shadow-2xl">
-            <h3 className="text-lg font-extrabold flex items-center gap-2 mb-4">
+          <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-2xl p-6 border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4">
+            <h3 className="text-lg font-extrabold flex items-center gap-2">
               <ConciergeBell className="w-5 h-5 text-amber-500" />
               Request Guest Service
             </h3>
@@ -1161,7 +1642,7 @@ export default function ResortBrainApp() {
                 >
                   <option value="housekeeping">Housekeeping & Linens</option>
                   <option value="amenities">Toiletries & Spa Amenities</option>
-                  <option value="front_desk">Front Desk & Luggage Assistance</option>
+                  <option value="front_desk">Front Desk & Luggage</option>
                 </select>
               </div>
 
@@ -1175,7 +1656,7 @@ export default function ResortBrainApp() {
                 />
               </div>
 
-              <div className="flex gap-2 pt-3">
+              <div className="flex gap-2 pt-2">
                 <button
                   onClick={() => setIsRequestModalOpen(false)}
                   className="w-1/2 py-2.5 rounded-xl font-bold text-xs bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300"
@@ -1194,74 +1675,49 @@ export default function ResortBrainApp() {
         </div>
       )}
 
-      {/* Bill & Payment Modal */}
+      {/* Bill Modal */}
       {isBillOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="w-full max-w-lg bg-white dark:bg-slate-900 rounded-2xl p-6 border border-slate-200 dark:border-slate-800 shadow-2xl">
+          <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-2xl p-6 border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
               <h3 className="text-lg font-extrabold flex items-center gap-2">
                 <Receipt className="w-5 h-5 text-amber-500" />
-                Room Folio Invoice & Settle
+                Room Folio Settle
               </h3>
-              <button onClick={() => setIsBillOpen(false)} className="text-slate-400">
-                ✕
-              </button>
+              <button onClick={() => setIsBillOpen(false)} className="text-slate-400">✕</button>
             </div>
 
-            <div className="py-4 space-y-3 text-xs">
-              <div className="flex justify-between">
-                <span className="text-slate-400">Hotel:</span>
-                <span className="font-bold">{hotelTitle}</span>
+            <div className="text-xs space-y-3">
+              <div className="flex justify-between text-slate-400">
+                <span>Room Dining & Amenities:</span>
+                <span className="font-bold text-white">₹1,050.00</span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-slate-400">Guest / Room:</span>
-                <span className="font-bold">Dr. Siddharth Verma ({hotelRoom})</span>
+              <div className="flex justify-between text-slate-400">
+                <span>GST (18%):</span>
+                <span className="font-bold text-white">₹189.00</span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-slate-400">Invoice Number:</span>
-                <span className="font-mono">INV-2026-3049</span>
+              <div className="flex justify-between text-slate-400">
+                <span>Service Charge (5%):</span>
+                <span className="font-bold text-white">₹52.50</span>
               </div>
-
-              <div className="p-3 rounded-xl bg-slate-100 dark:bg-slate-800/80 space-y-1.5 pt-2">
-                <div className="flex justify-between text-slate-400">
-                  <span>Room Dining & Amenities:</span>
-                  <span>₹1,050.00</span>
-                </div>
-                <div className="flex justify-between text-slate-400">
-                  <span>GST (18%):</span>
-                  <span>₹189.00</span>
-                </div>
-                <div className="flex justify-between text-slate-400">
-                  <span>Service Charge (5%):</span>
-                  <span>₹52.50</span>
-                </div>
-                <div className="flex justify-between font-black text-sm pt-2 border-t border-slate-300 dark:border-slate-700 text-amber-500">
-                  <span>Total Payable:</span>
-                  <span>₹1,291.50</span>
-                </div>
+              <div className="flex justify-between font-black text-sm pt-2 border-t border-slate-300 dark:border-slate-700 text-amber-500">
+                <span>Total Due:</span>
+                <span>₹1,291.50</span>
               </div>
 
               {billSettled ? (
-                <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-center space-y-2">
-                  <div className="text-emerald-500 font-bold flex items-center justify-center gap-1.5 text-sm">
-                    <CheckCircle2 className="w-5 h-5" /> Payment Succeeded (Test Mode)
+                <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-center space-y-1">
+                  <div className="text-emerald-500 font-bold flex items-center justify-center gap-1">
+                    <CheckCircle2 className="w-4 h-4" /> Paid in Test Mode
                   </div>
-                  <p className="text-[11px] text-slate-400">
-                    Transaction Ref: tx_mock_2026_99341 • Digital receipt emailed to guest.
-                  </p>
-                  <button
-                    onClick={() => window.print()}
-                    className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 text-white font-bold text-xs"
-                  >
-                    <Printer className="w-3.5 h-3.5" /> Print Receipt
-                  </button>
+                  <p className="text-[10px] text-slate-400">Invoice settled.</p>
                 </div>
               ) : (
                 <button
-                  onClick={handleSettleBill}
-                  className="w-full py-3 rounded-xl font-black text-sm bg-gradient-to-r from-amber-600 to-amber-500 text-slate-950 shadow-lg hover:brightness-105 transition-all"
+                  onClick={() => setBillSettled(true)}
+                  className="w-full py-3 rounded-xl font-black text-xs bg-amber-500 text-slate-950 shadow hover:brightness-105"
                 >
-                  Pay & Settle Folio (Test Mode)
+                  Pay & Settle (Test Mode)
                 </button>
               )}
             </div>

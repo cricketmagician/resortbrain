@@ -175,6 +175,134 @@ class ResortBrainDatabase {
     return this.requests.filter((r) => r.hotel_id === hotelId && (!stayId || r.stay_id === stayId));
   }
 
+  // --- Hotel Onboarding / Registration ---
+  public registerHotel(params: {
+    name: string;
+    slug: string;
+    tagline?: string;
+    managerName: string;
+    managerEmail: string;
+    currency?: string;
+    roomsCount?: number;
+  }) {
+    const existing = this.hotels.find((h) => h.slug === params.slug);
+    if (existing) {
+      throw new Error(`Hotel with identifier "${params.slug}" already exists.`);
+    }
+
+    const hotelId = `hotel-${Date.now().toString().slice(-4)}`;
+    const newHotel = {
+      id: hotelId,
+      slug: params.slug,
+      name: params.name,
+      tagline: params.tagline || 'Luxury Hospitality & Operations',
+      logo_url: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=120&auto=format&fit=crop&q=80',
+      banner_url: 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?w=1200&auto=format&fit=crop&q=80',
+      currency: params.currency || 'INR',
+      tax_rate_percent: 18.0,
+      service_charge_percent: 5.0,
+      status: 'active',
+    };
+
+    this.hotels.push(newHotel);
+
+    // Create Manager profile & membership
+    const managerId = `user-${Date.now().toString().slice(-4)}`;
+    this.staff.push({
+      id: managerId,
+      hotel_id: hotelId,
+      email: params.managerEmail,
+      fullName: params.managerName,
+      role: 'hotel_manager',
+    });
+
+    // Populate initial default rooms
+    const count = params.roomsCount || 12;
+    for (let i = 1; i <= count; i++) {
+      const roomNum = `Room ${100 + i}`;
+      this.rooms.push({
+        id: `room-${hotelId}-${i}`,
+        hotel_id: hotelId,
+        room_number: roomNum,
+        room_type: i % 2 === 0 ? 'Royal Ocean Villa' : 'Deluxe Garden Sanctuary',
+        status: i === 1 ? 'occupied' : 'available',
+        qr_code_token: `QR_${params.slug.toUpperCase()}_${100 + i}`,
+      });
+    }
+
+    // Populate starter gourmet menu items for this new hotel
+    this.menuItems.push(
+      {
+        id: `item-${hotelId}-1`,
+        hotel_id: hotelId,
+        category: 'All-Day Gourmet Dining',
+        name: 'Artisan Avocado Sourdough Tartine',
+        description: 'Crushed Hass avocado, organic microgreens, heirloom cherry tomatoes.',
+        price_paise: 55000,
+        image_url: 'https://images.unsplash.com/photo-1525351484163-7529414344d8?w=500&auto=format&fit=crop&q=80',
+        is_veg: true,
+        allergen_tags: ['Gluten'],
+        is_available: true,
+      },
+      {
+        id: `item-${hotelId}-2`,
+        hotel_id: hotelId,
+        category: 'Signature Grills',
+        name: 'Wood-Fired Truffle Pizza',
+        description: 'Buffalo mozzarella, wild forest porcini, truffle oil.',
+        price_paise: 89000,
+        image_url: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=500&auto=format&fit=crop&q=80',
+        is_veg: true,
+        allergen_tags: ['Dairy'],
+        is_available: true,
+      },
+      {
+        id: `item-${hotelId}-3`,
+        hotel_id: hotelId,
+        category: 'Beverages',
+        name: 'Fresh Royal Coconut Water',
+        description: 'Chilled tender coconut water served in shell.',
+        price_paise: 25000,
+        image_url: 'https://images.unsplash.com/photo-1527661591475-527312dd65f5?w=500&auto=format&fit=crop&q=80',
+        is_veg: true,
+        allergen_tags: [],
+        is_available: true,
+      }
+    );
+
+    // Initial Stay for Room 101 so guest PWA is instantly active
+    this.stays.push({
+      id: `stay-${hotelId}-1`,
+      hotel_id: hotelId,
+      room_id: `room-${hotelId}-1`,
+      room_number: 'Room 101',
+      guest_id: `guest-${hotelId}-1`,
+      guest_name: `${params.managerName} (Guest Stay)`,
+      status: 'active',
+      stay_token: `token_${params.slug}_room_101`,
+      check_in: new Date().toISOString(),
+      check_out: new Date(Date.now() + 86400000 * 3).toISOString(),
+    });
+
+    logAuditEvent({
+      hotel_id: hotelId,
+      actor_role: 'hotel_manager',
+      action: 'HOTEL_REGISTERED',
+      target_resource: `hotel:${hotelId}`,
+      details: { name: params.name, slug: params.slug, managerEmail: params.managerEmail },
+    });
+
+    return {
+      hotel: newHotel,
+      manager: {
+        id: managerId,
+        name: params.managerName,
+        email: params.managerEmail,
+        role: 'hotel_manager',
+      },
+    };
+  }
+
   // --- Strict Server-Side Pricing Order Creation ---
   public createOrder(params: {
     hotelId: string;
