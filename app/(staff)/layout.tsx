@@ -19,6 +19,7 @@ import {
   Moon,
   Sparkles,
   Layers,
+  LayoutDashboard,
 } from "lucide-react";
 import { PinSwitchModal } from "@/components/staff/pin-switch-modal";
 import { cn } from "@/lib/utils";
@@ -48,30 +49,35 @@ export default function StaffLayout({
 
   const navItems = [
     {
-      label: "[1] Kitchen Queue",
+      label: "Dashboard",
+      href: "/dashboard",
+      icon: LayoutDashboard,
+    },
+    {
+      label: "Kitchen KDS",
       href: "/kitchen",
       icon: UtensilsCrossed,
       badge: 4,
     },
     {
-      label: "[2] Front Desk",
+      label: "Front Desk & PINs",
       href: "/desk",
       icon: ConciergeBell,
     },
     {
-      label: "[3] Housekeeping",
+      label: "Housekeeping",
       href: "/housekeeping",
       icon: BedDouble,
     },
     {
-      label: "[4] Devices & Push",
+      label: "Devices & Push",
       href: "/device",
       icon: Tablet,
     },
   ];
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-950 text-slate-100 pb-20">
+    <div className="min-h-screen flex flex-col bg-slate-950 text-slate-100 pb-8">
       {/* 1. Global Enterprise Header */}
       <header className="sticky top-0 z-30 border-b border-slate-800 bg-slate-950/95 backdrop-blur-md">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 flex items-center justify-between h-14">

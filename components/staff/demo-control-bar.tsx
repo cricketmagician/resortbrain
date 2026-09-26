@@ -44,8 +44,31 @@ export function DemoControlBar() {
     latencyMs,
   } = useOps();
 
-  const [isExpanded, setIsExpanded] = useState(true);
+  const [isExpanded, setIsExpanded] = useState(false);
   const pathname = usePathname();
+
+  if (!isExpanded) {
+    return (
+      <div className="fixed bottom-4 right-4 z-50">
+        <button
+          onClick={() => setIsExpanded(true)}
+          className="flex items-center gap-2 px-3.5 py-2 rounded-full bg-slate-900/95 border border-slate-700/80 text-slate-200 hover:text-white shadow-2xl backdrop-blur-md transition-all hover:scale-105 active:scale-95 text-xs font-semibold group cursor-pointer"
+          title="Open Demo & Testing Controls"
+        >
+          <span className="flex h-2 w-2 relative">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+          </span>
+          <span className="font-mono text-[11px] text-emerald-400">
+            {isSimulatedOffline ? "OFFLINE" : `${latencyMs}ms Live`}
+          </span>
+          <span className="text-slate-600">•</span>
+          <span className="text-slate-300 group-hover:text-emerald-300">⚡ Demo Tools</span>
+          <ChevronUp className="w-3.5 h-3.5 text-slate-400 group-hover:text-white" />
+        </button>
+      </div>
+    );
+  }
 
   return (
     <aside
@@ -60,7 +83,7 @@ export function DemoControlBar() {
             <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
           </span>
           <span className="font-bold text-slate-200 tracking-wide uppercase">
-            Member 3 Operations Control Deck
+            Operations Control Deck
           </span>
           <span className="text-slate-500 font-mono hidden sm:inline">
             | Channel: hotel:{currentHotel.id}:dept:*
@@ -74,15 +97,11 @@ export function DemoControlBar() {
           </div>
 
           <button
-            onClick={() => setIsExpanded(!isExpanded)}
+            onClick={() => setIsExpanded(false)}
             className="flex items-center gap-1 px-2 py-0.5 rounded bg-slate-800 text-slate-300 hover:text-white transition-colors"
           >
-            <span>{isExpanded ? "Collapse Deck" : "Expand Deck"}</span>
-            {isExpanded ? (
-              <ChevronDown className="w-3.5 h-3.5" />
-            ) : (
-              <ChevronUp className="w-3.5 h-3.5" />
-            )}
+            <span>Minimize</span>
+            <ChevronDown className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>

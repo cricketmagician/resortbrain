@@ -27,6 +27,9 @@ export function MarketingHeader() {
           <Link href={header.pricing.href} className="text-sm text-ink-muted transition-colors hover:text-ink">
             {header.pricing.label}
           </Link>
+          <Link href="/dashboard" className="text-sm font-semibold text-amber-400 hover:text-amber-300 transition-colors">
+            Hotel Dashboard
+          </Link>
         </nav>
 
         <div className="hidden md:block">

@@ -135,7 +135,7 @@ export default function ResortBrainPlatform() {
   const [isDark, setIsDark] = useState(true);
 
   // App mode: 'landing' (SaaS Marketing Site) | 'dashboard' (Hotel Management Dashboard)
-  const [viewMode, setViewMode] = useState<'landing' | 'dashboard'>('landing');
+  const [viewMode, setViewMode] = useState<'landing' | 'dashboard'>('dashboard');
 
   // Dashboard Sub-Tab
   const [activeTab, setActiveTab] = useState<'overview' | 'kds' | 'desk' | 'rooms' | 'guest_preview' | 'security'>('overview');
