@@ -268,13 +268,52 @@ export default function DashboardPage() {
       const res = await fetch(`/api/requests/${requestId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nextStatus: 'completed', hotelId: currentHotelId }),
+        body: JSON.stringify({ nextStatus: 'completed', hotelId: currentHotelId, actorName: 'Housekeeping Team' }),
       });
       if (res.ok) {
         await refreshData();
       }
     } catch (err) {
       console.error('Error completing request:', err);
+    }
+  };
+
+  // Acknowledge request (On it)
+  const handleAcknowledgeRequest = async (requestId: string) => {
+    try {
+      const res = await fetch(`/api/requests/${requestId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nextStatus: 'acknowledged', hotelId: currentHotelId, actorName: 'Housekeeping Lead' }),
+      });
+      if (res.ok) {
+        await refreshData();
+      }
+    } catch (err) {
+      console.error('Error acknowledging request:', err);
+    }
+  };
+
+  // Simulate Housekeeping Request
+  const handleSimulateRequest = async () => {
+    try {
+      const res = await fetch('/api/requests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          stayToken: 'rb_token_hotel-001_room-103_3040',
+          category: 'housekeeping',
+          title: 'Extra Plush Bath Towels & Aromatherapy Kit',
+          details: 'Please deliver 2 extra bath sheets and lavender diffuser.',
+          priority: 'high',
+          slaMinutes: 15,
+        }),
+      });
+      if (res.ok) {
+        await refreshData();
+      }
+    } catch (err) {
+      console.error('Error simulating request:', err);
     }
   };
 
@@ -1375,8 +1414,17 @@ export default function DashboardPage() {
                     <span>Housekeeping & Service Requests</span>
                   </h2>
                   <p className="text-xs text-slate-400">
-                    Guest requests for extra towels, turndown, luggage assistance, and room cleaning.
+                    Live guest requests from in-room PWA for towels, housekeeping, turndown, and amenities.
                   </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleSimulateRequest}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-amber-400 font-semibold text-xs transition-colors cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Simulate Request</span>
+                  </button>
                 </div>
               </div>
 
@@ -1384,11 +1432,19 @@ export default function DashboardPage() {
                 {requests.map((req) => (
                   <div
                     key={req.id}
-                    className="p-4 rounded-xl border border-slate-800 bg-[#0e1424] flex flex-col justify-between gap-3"
+                    className={`p-4 rounded-xl border bg-[#0e1424] flex flex-col justify-between gap-3 ${
+                      req.status === 'created'
+                        ? 'border-amber-500/40 shadow-sm shadow-amber-950/20'
+                        : req.status === 'acknowledged'
+                        ? 'border-blue-500/40'
+                        : 'border-slate-800'
+                    }`}
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <span className="font-bold text-xs text-white">{req.room_number}</span>
+                        <span className="font-bold text-xs text-white px-2 py-0.5 rounded bg-slate-800/80 border border-slate-700">
+                          {req.room_number || 'Room 304'}
+                        </span>
                         <span className="text-slate-600">•</span>
                         <span className="text-xs font-semibold text-amber-400 capitalize">{req.category}</span>
                       </div>
@@ -1396,10 +1452,12 @@ export default function DashboardPage() {
                         className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
                           req.status === 'completed'
                             ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
-                            : 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
+                            : req.status === 'acknowledged'
+                            ? 'bg-blue-500/15 text-blue-300 border border-blue-500/30'
+                            : 'bg-amber-500/15 text-amber-300 border border-amber-500/30 animate-pulse'
                         }`}
                       >
-                        {req.status}
+                        {req.status === 'acknowledged' ? 'On It / In Progress' : req.status}
                       </span>
                     </div>
 
@@ -1408,24 +1466,34 @@ export default function DashboardPage() {
                       {req.details && <p className="text-xs text-slate-400 mt-1">{req.details}</p>}
                     </div>
 
-                    <div className="flex items-center justify-between pt-2 border-t border-slate-800/80 text-xs">
+                    <div className="flex items-center justify-between pt-2 border-t border-slate-800/80 text-xs gap-2">
                       <span className="text-slate-500 font-mono text-[11px]">
                         {new Date(req.created_at).toLocaleTimeString()}
                       </span>
-                      {req.status !== 'completed' && (
-                        <button
-                          onClick={() => handleCompleteRequest(req.id)}
-                          className="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition-colors cursor-pointer"
-                        >
-                          Mark Completed
-                        </button>
-                      )}
+                      <div className="flex items-center gap-2">
+                        {req.status === 'created' && (
+                          <button
+                            onClick={() => handleAcknowledgeRequest(req.id)}
+                            className="px-3 py-1 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs transition-colors cursor-pointer"
+                          >
+                            Accept / On It
+                          </button>
+                        )}
+                        {req.status !== 'completed' && (
+                          <button
+                            onClick={() => handleCompleteRequest(req.id)}
+                            className="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition-colors cursor-pointer"
+                          >
+                            Mark Completed
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 ))}
                 {requests.length === 0 && (
                   <div className="col-span-2 p-8 text-center rounded-xl border border-dashed border-slate-800 text-xs text-slate-500">
-                    No open service requests at this time.
+                    No open service requests at this time. Click &quot;Simulate Request&quot; to test.
                   </div>
                 )}
               </div>

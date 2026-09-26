@@ -7,6 +7,8 @@ import { createServiceRequest } from '@/modules/requests/service';
 import { getGuestRequests, getDepartmentRequests } from '@/modules/requests/queries';
 import { extractStayToken, verifyStayToken } from '@/server/auth';
 import { supabaseServer } from '@/server/supabase';
+import { resolveTenant } from '@/server/tenant';
+import { sendWebPushNotification } from '@/server/push';
 
 export async function POST(req: NextRequest) {
   try {
@@ -24,21 +26,42 @@ export async function POST(req: NextRequest) {
 
     const request = await createServiceRequest(validated);
 
-    // Sync to Supabase in background
+    // Send push notification to target department
     try {
-      const targetHotelId = request.hotel_id === 'hotel-001' ? '11111111-1111-1111-1111-111111111111' : request.hotel_id;
-      supabaseServer.from('service_requests').insert({
-        hotel_id: targetHotelId,
-        stay_id: request.stay_id,
-        room_id: request.room_id || 'a0000101-0000-0000-0000-000000000101',
+      await sendWebPushNotification({
+        hotel_id: request.hotel_id,
+        department: request.category as any,
+        title: `New ${request.category.toUpperCase()} Request: ${request.room_number || 'Room'}`,
+        body: `${request.title}${request.details ? ' - ' + request.details : ''}`,
+      });
+    } catch {}
+
+    // Sync to Supabase in background with safe UUID handling
+    try {
+      const tenant = resolveTenant(request.hotel_id);
+      const targetStayId =
+        request.stay_id === 'stay-001' || !request.stay_id.includes('-') || request.stay_id.length < 20
+          ? 'c0000101-0000-0000-0000-000000000101'
+          : request.stay_id;
+      const targetRoomId =
+        request.room_id && request.room_id.length > 20
+          ? request.room_id
+          : 'a0000101-0000-0000-0000-000000000101';
+
+      await supabaseServer.from('service_requests').insert({
+        hotel_id: tenant.uuid,
+        stay_id: targetStayId,
+        room_id: targetRoomId,
         category: request.category,
         title: request.title,
         details: request.details,
         status: request.status,
         priority: request.priority,
         sla_minutes: request.sla_minutes,
-      }).then(() => {});
-    } catch {}
+      });
+    } catch (err) {
+      console.warn('Background Supabase sync error for service request:', err);
+    }
 
     return NextResponse.json({ success: true, request }, { status: 201 });
   } catch (err: unknown) {
@@ -65,12 +88,14 @@ export async function GET(req: NextRequest) {
     }
 
     if (hotelId) {
+      const localRequests = await getDepartmentRequests(hotelId, category);
+      const tenant = resolveTenant(hotelId);
+
       try {
-        const targetHId = hotelId === 'hotel-001' ? '11111111-1111-1111-1111-111111111111' : hotelId;
         let query = supabaseServer
           .from('service_requests')
-          .select('id, hotel_id, stay_id, room_id, category, title, details, status, priority, sla_minutes, created_at')
-          .eq('hotel_id', targetHId)
+          .select('id, hotel_id, stay_id, room_id, category, title, details, status, priority, sla_minutes, created_at, rooms(room_number)')
+          .or(`hotel_id.eq.${tenant.uuid},hotel_id.eq.${tenant.id}`)
           .order('created_at', { ascending: false });
 
         if (category) {
@@ -79,12 +104,22 @@ export async function GET(req: NextRequest) {
 
         const { data: sbRequests, error } = await query;
         if (!error && sbRequests && sbRequests.length > 0) {
-          return NextResponse.json({ requests: sbRequests, source: 'supabase' });
+          const formattedSb = sbRequests.map((r: any) => ({
+            ...r,
+            room_number: r.rooms?.room_number || (r.room_id ? 'Room 304' : 'Suite 101'),
+          }));
+
+          // Local in-memory requests take priority, merged with Supabase history
+          const localOnly = localRequests.filter(
+            (lr) => !formattedSb.some((sr: any) => sr.id === lr.id || (sr.title === lr.title && sr.status === lr.status))
+          );
+
+          const merged = [...localOnly, ...formattedSb];
+          return NextResponse.json({ requests: merged, source: 'merged' });
         }
       } catch {}
 
-      const requests = await getDepartmentRequests(hotelId, category);
-      return NextResponse.json({ requests, source: 'local' });
+      return NextResponse.json({ requests: localRequests, source: 'local' });
     }
 
     return NextResponse.json({ error: 'Missing stayToken or hotelId.' }, { status: 400 });

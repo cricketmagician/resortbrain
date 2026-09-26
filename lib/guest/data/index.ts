@@ -19,7 +19,7 @@ const PROBE_TIMEOUT_MS = 1500;
 
 function readConfiguredSource(): 'api' | 'mock' | 'auto' {
   const raw = process.env.NEXT_PUBLIC_GUEST_DATA_SOURCE;
-  return raw === 'api' || raw === 'mock' ? raw : 'auto';
+  return raw === 'mock' ? 'mock' : 'api';
 }
 
 async function probeSource(): Promise<'api' | 'mock'> {

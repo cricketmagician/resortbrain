@@ -415,6 +415,23 @@ export async function createRequest(
   };
   state.requests.unshift(record);
   saveState(state);
+
+  // Sync to live API if in browser environment
+  if (typeof window !== 'undefined') {
+    fetch('/api/requests', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        stayToken: session.stayToken,
+        category: input.category,
+        title: input.title,
+        details: input.details,
+        priority: input.priority,
+        slaMinutes: REQUEST_SLA_MINUTES[input.category],
+      }),
+    }).catch(() => {});
+  }
+
   return mapRequest(record, Date.now(), simSpeedDivisor());
 }
 
