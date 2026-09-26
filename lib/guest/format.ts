@@ -61,6 +61,18 @@ export function formatDateTime(iso: string, timeZone: string): string {
   return `${p.day} ${month} ${p.year}, ${p.hour}:${p.minute} ${p.dayPeriod.toUpperCase()}`;
 }
 
+const TITLE_PREFIX = /^(Dr|Mr|Mrs|Ms|Prof|Lord|Lady|Sir)\.?$/i;
+
+/** "{first name}" for greetings (docs/m2/08 home.greeting.*). A bare first name reads oddly with
+ *  a title attached ("Dr. Siddharth Verma" -> "Dr."), so a leading title keeps the surname too. */
+export function displayFirstName(fullName: string): string {
+  const parts = fullName.trim().split(/\s+/);
+  const [first, ...rest] = parts;
+  if (!first) return fullName;
+  if (TITLE_PREFIX.test(first) && rest.length > 0) return `${first} ${rest[rest.length - 1]}`;
+  return first;
+}
+
 export function formatRelative(iso: string, now: number = Date.now()): string {
   const diffMs = now - new Date(iso).getTime();
   const diffSec = Math.round(diffMs / 1000);
