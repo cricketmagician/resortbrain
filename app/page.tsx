@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
 import {
   Bell,
   Moon,
@@ -510,6 +511,14 @@ export default function ResortBrainPlatform() {
                   {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
                 </button>
 
+                <Link
+                  href="/guest"
+                  className="px-3 py-2 rounded-xl text-xs font-bold bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 border border-amber-500/30 transition-all flex items-center gap-1.5 shadow-sm"
+                >
+                  <Smartphone className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Guest Mobile View</span>
+                </Link>
+
                 <button
                   onClick={() => setIsLoginModalOpen(true)}
                   className="px-4 py-2 rounded-xl text-xs font-bold border border-slate-300 dark:border-slate-700 hover:border-amber-500 text-slate-800 dark:text-slate-200 transition-all shadow-sm"
@@ -560,8 +569,16 @@ export default function ResortBrainPlatform() {
                   className="px-6 py-3.5 rounded-2xl font-bold text-sm bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 hover:border-amber-500 text-slate-800 dark:text-slate-200 hover:scale-105 shadow-lg transition-all flex items-center gap-2"
                 >
                   <Laptop className="w-4 h-4 text-amber-500" />
-                  <span>Explore Live Working Demo</span>
+                  <span>Hotel Operating Dashboard</span>
                 </button>
+
+                <Link
+                  href="/guest"
+                  className="px-6 py-3.5 rounded-2xl font-bold text-sm bg-amber-500/10 border border-amber-500/30 text-amber-400 hover:bg-amber-500/20 hover:scale-105 shadow-lg transition-all flex items-center gap-2"
+                >
+                  <Smartphone className="w-4 h-4 text-amber-400" />
+                  <span>Open Guest Mobile Concierge</span>
+                </Link>
               </div>
 
               {/* Hero Stats */}
