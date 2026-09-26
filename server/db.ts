@@ -510,20 +510,68 @@ class ResortBrainDatabase {
     return req;
   }
 
+  // --- Order Quotation (No Side Effects) ---
+  public quoteOrder(params: {
+    hotelId: string;
+    items: Array<{ menuItemId: string; quantity: number }>;
+  }) {
+    const hotel = this.getHotel(params.hotelId);
+    if (!hotel) throw new Error('Hotel tenant not found.');
+
+    let subtotalPaise = 0;
+    const lines: Array<{
+      menuItemId: string;
+      itemName: string;
+      quantity: number;
+      unitPricePaise: number;
+      totalPricePaise: number;
+    }> = [];
+
+    for (const item of params.items) {
+      const menuItem = this.menuItems.find((m) => m.id === item.menuItemId && m.hotel_id === params.hotelId);
+      if (!menuItem) throw new Error(`Menu item ${item.menuItemId} does not exist in this hotel.`);
+      if (!menuItem.is_available) throw new Error(`Item ${menuItem.name} is currently unavailable.`);
+      if (item.quantity <= 0) throw new Error('Quantity must be greater than zero.');
+
+      const itemTotal = menuItem.price_paise * item.quantity;
+      subtotalPaise += itemTotal;
+      lines.push({
+        menuItemId: menuItem.id,
+        itemName: menuItem.name,
+        quantity: item.quantity,
+        unitPricePaise: menuItem.price_paise,
+        totalPricePaise: itemTotal,
+      });
+    }
+
+    const taxPaise = Math.round((subtotalPaise * (hotel.tax_rate_percent || 18)) / 100);
+    const serviceChargePaise = Math.round((subtotalPaise * (hotel.service_charge_percent || 5)) / 100);
+    const totalPaise = subtotalPaise + taxPaise + serviceChargePaise;
+
+    return {
+      subtotal_paise: subtotalPaise,
+      tax_paise: taxPaise,
+      service_charge_paise: serviceChargePaise,
+      total_paise: totalPaise,
+      lines,
+    };
+  }
+
   // --- Invoicing & Billing ---
   public getOrCreateStayInvoice(stayId: string, hotelId: string): Invoice {
     const stay = this.stays.find((s) => s.id === stayId && s.hotel_id === hotelId);
     if (!stay) throw new Error('Stay not found.');
 
     let invoice = this.invoices.find((i) => i.stay_id === stayId);
-    if (!invoice) {
-      // Calculate all delivered or pending orders
-      const stayOrders = this.getOrders(hotelId, stayId);
-      const subtotalPaise = stayOrders.reduce((sum, o) => sum + o.subtotal_paise, 0);
-      const taxPaise = stayOrders.reduce((sum, o) => sum + o.tax_paise, 0);
-      const serviceChargePaise = stayOrders.reduce((sum, o) => sum + o.service_charge_paise, 0);
-      const totalPaise = subtotalPaise + taxPaise + serviceChargePaise;
+    
+    // Calculate all non-cancelled orders for this stay
+    const stayOrders = this.getOrders(hotelId, stayId).filter((o) => o.status !== 'cancelled');
+    const subtotalPaise = stayOrders.reduce((sum, o) => sum + o.subtotal_paise, 0);
+    const taxPaise = stayOrders.reduce((sum, o) => sum + o.tax_paise, 0);
+    const serviceChargePaise = stayOrders.reduce((sum, o) => sum + o.service_charge_paise, 0);
+    const totalPaise = subtotalPaise + taxPaise + serviceChargePaise;
 
+    if (!invoice) {
       invoice = {
         id: `inv_${Date.now()}`,
         hotel_id: hotelId,
@@ -537,9 +585,19 @@ class ResortBrainDatabase {
         created_at: new Date().toISOString(),
       };
       this.invoices.push(invoice);
+    } else if (invoice.status === 'draft') {
+      // Contract Request C7: Dynamically recompute totals for draft invoices so newly placed orders are included
+      invoice.subtotal_paise = subtotalPaise;
+      invoice.tax_paise = taxPaise;
+      invoice.service_charge_paise = serviceChargePaise;
+      invoice.total_paise = totalPaise;
     }
+
     return invoice;
   }
+
+  // Set of processed payment idempotency keys
+  private processedPaymentKeys = new Set<string>();
 
   public recordPayment(params: {
     invoiceId: string;
@@ -547,21 +605,93 @@ class ResortBrainDatabase {
     amountPaise: number;
     idempotencyKey?: string;
   }) {
+    // Idempotency check
+    if (params.idempotencyKey && this.processedPaymentKeys.has(params.idempotencyKey)) {
+      const existing = this.invoices.find((i) => i.id === params.invoiceId && i.hotel_id === params.hotelId);
+      if (existing) return existing;
+    }
+
     const invoice = this.invoices.find((i) => i.id === params.invoiceId && i.hotel_id === params.hotelId);
     if (!invoice) throw new Error('Invoice not found.');
 
+    if (invoice.status === 'paid') {
+      return invoice;
+    }
+
+    // Verify payment amount matches invoice total
+    if (params.amountPaise !== invoice.total_paise) {
+      throw new Error(`Payment amount (${params.amountPaise} paise) must match invoice total (${invoice.total_paise} paise).`);
+    }
+
     invoice.status = 'paid';
     invoice.paid_at = new Date().toISOString();
+
+    if (params.idempotencyKey) {
+      this.processedPaymentKeys.add(params.idempotencyKey);
+    }
 
     logAuditEvent({
       hotel_id: params.hotelId,
       actor_role: 'billing_service',
       action: 'PAYMENT_RECORDED',
       target_resource: `invoice:${invoice.id}`,
-      details: { amountPaise: params.amountPaise, invoiceNumber: invoice.invoice_number },
+      details: { amountPaise: params.amountPaise, invoiceNumber: invoice.invoice_number, idempotencyKey: params.idempotencyKey },
     });
 
     return invoice;
+  }
+
+  // --- Guest Feedback Storage (Contract Request C5) ---
+  public feedback: Array<{
+    id: string;
+    hotel_id: string;
+    stay_id: string;
+    guest_name: string;
+    room_number: string;
+    rating: number;
+    tags: string[];
+    comment?: string;
+    invoice_id?: string;
+    order_id?: string;
+    created_at: string;
+  }> = [];
+
+  public submitFeedback(params: {
+    hotelId: string;
+    stayId: string;
+    guestName: string;
+    roomNumber: string;
+    rating: number;
+    tags?: string[];
+    comment?: string;
+    invoiceId?: string;
+    orderId?: string;
+  }) {
+    const entry = {
+      id: `fb_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      hotel_id: params.hotelId,
+      stay_id: params.stayId,
+      guest_name: params.guestName,
+      room_number: params.roomNumber,
+      rating: Math.min(5, Math.max(1, params.rating)),
+      tags: params.tags || [],
+      comment: params.comment,
+      invoice_id: params.invoiceId,
+      order_id: params.orderId,
+      created_at: new Date().toISOString(),
+    };
+
+    this.feedback.push(entry);
+
+    logAuditEvent({
+      hotel_id: params.hotelId,
+      actor_role: 'guest',
+      action: 'GUEST_FEEDBACK_SUBMITTED',
+      target_resource: `feedback:${entry.id}`,
+      details: { rating: entry.rating, tags: entry.tags, comment: entry.comment },
+    });
+
+    return entry;
   }
 }
 

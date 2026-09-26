@@ -10,6 +10,7 @@ export const VerifyQRInputSchema = z.object({
 export const StayTokenSessionSchema = z.object({
   stayId: z.string(),
   hotelId: z.string(),
+  hotelSlug: z.string().optional(),
   hotelName: z.string(),
   roomId: z.string(),
   roomNumber: z.string(),

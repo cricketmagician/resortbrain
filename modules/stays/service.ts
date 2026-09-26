@@ -16,6 +16,7 @@ export async function resolveSessionFromQR(qrToken: string): Promise<StayTokenSe
   const token = createStayToken({
     stayId: stay.id,
     hotelId: stay.hotel_id,
+    hotelSlug: hotel.slug,
     roomId: stay.room_id,
     roomNumber: stay.room_number,
     guestId: stay.guest_id,
@@ -26,6 +27,7 @@ export async function resolveSessionFromQR(qrToken: string): Promise<StayTokenSe
   return {
     stayId: stay.id,
     hotelId: hotel.id,
+    hotelSlug: hotel.slug,
     hotelName: hotel.name,
     roomId: stay.room_id,
     roomNumber: stay.room_number,
@@ -46,6 +48,7 @@ export async function resolveSessionFromToken(stayToken: string): Promise<StayTo
     return {
       stayId: seededStay.id,
       hotelId: hotel.id,
+      hotelSlug: hotel.slug,
       hotelName: hotel.name,
       roomId: seededStay.room_id,
       roomNumber: seededStay.room_number,
@@ -67,6 +70,7 @@ export async function resolveSessionFromToken(stayToken: string): Promise<StayTo
   return {
     stayId: verified.stayId,
     hotelId: hotel.id,
+    hotelSlug: hotel.slug,
     hotelName: hotel.name,
     roomId: verified.roomId,
     roomNumber: verified.roomNumber,
