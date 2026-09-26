@@ -26,10 +26,16 @@ export const GUEST_TID = {
   menuQty: (id: string) => `menu-qty-${id}`,
   cartBar: 'cart-bar',
   itemSheet: 'item-sheet',
+  itemDetail: 'item-detail',
+  itemNote: 'item-note',
+  itemQty: 'item-qty',
   itemAdd: 'item-add',
 
   cart: 'guest-cart',
   cartLine: (id: string) => `cart-line-${id}`,
+  cartNote: 'cart-note',
+  cartQuote: 'cart-quote',
+  cartNoQuote: 'cart-no-quote',
   cartPlaceOrder: 'cart-place-order',
   cartEmpty: 'cart-empty',
 

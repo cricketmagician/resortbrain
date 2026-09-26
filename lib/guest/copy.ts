@@ -14,6 +14,11 @@ export const GUEST_COPY = {
   common: {
     retry: 'Try again',
     callDesk: 'Call the front desk',
+    money: {
+      subtotal: 'Subtotal',
+      tax: 'GST',
+      serviceCharge: 'Service charge',
+    },
   },
   home: {
     greeting: {
@@ -45,7 +50,7 @@ export const GUEST_COPY = {
   },
   menu: {
     title: 'In-room dining',
-    subtitle: (room: string, estimate: string) => `Delivered to Room ${room} · ${estimate}`,
+    subtitle: (room: string, estimate: string) => `Delivered to ${room} · ${estimate}`,
     subtitleNoSession: 'Browse our menu',
     search: { placeholder: 'Search dishes' },
     vegOnly: 'Veg only',
@@ -53,12 +58,13 @@ export const GUEST_COPY = {
     clearSearch: 'Clear search',
     empty: 'The kitchen is resting right now. The front desk can help.',
     added: 'Added to your order',
+    viewCart: 'View cart',
     unavailable: 'Unavailable right now',
     scanToOrder: 'Scan the QR code in your room to order',
   },
   item: {
     each: (price: string) => `${price} each`,
-    note: { label: 'Note for the kitchen', placeholder: 'e.g. no chilli, extra crispy' },
+    note: { label: 'Note for the kitchen', placeholder: 'e.g. no chilli, extra crispy', add: 'Add note' },
     add: 'Add to order',
     update: 'Update order',
     removed: 'Removed from your order',
@@ -68,9 +74,11 @@ export const GUEST_COPY = {
   cart: {
     title: 'Your order',
     deliverTo: 'Deliver to',
+    room: (room: string, hotel: string) => `${room} · ${hotel}`,
     addMore: 'Add more items',
     note: { label: 'Note for the kitchen' },
     summary: {
+      total: 'Total',
       calculated: (hotel: string) => `Calculated by ${hotel}'s billing system.`,
       noQuote:
         "Taxes and service charge are added by the hotel. You'll see the exact total the moment you place your order.",
@@ -83,6 +91,7 @@ export const GUEST_COPY = {
       rate: "You're ordering a little fast. Please try again in a moment.",
       offline: "You're offline. Your order is saved here, so try again when you're connected.",
       tooLong: 'Kitchen notes can be up to 500 characters.',
+      generic: "Your order didn't go through. Please try again.",
     },
   },
   request: {

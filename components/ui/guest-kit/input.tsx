@@ -124,9 +124,10 @@ export interface SearchFieldProps {
   onClear?: () => void;
   className?: string;
   'aria-label'?: string;
+  'data-testid'?: string;
 }
 
-export function SearchField({ value, onChange, placeholder, onClear, className, ...aria }: SearchFieldProps) {
+export function SearchField({ value, onChange, placeholder, onClear, className, ...rest }: SearchFieldProps) {
   return (
     <div className={cn('relative flex items-center', className)}>
       <Search aria-hidden className="pointer-events-none absolute left-3.5 size-5 text-ink-subtle" strokeWidth={1.75} />
@@ -135,7 +136,8 @@ export function SearchField({ value, onChange, placeholder, onClear, className, 
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        aria-label={aria['aria-label'] ?? placeholder}
+        aria-label={rest['aria-label'] ?? placeholder}
+        {...rest}
         className="h-12 w-full rounded-full border border-line bg-surface-2 pl-11 pr-11 text-base text-ink placeholder:text-ink-subtle transition-colors duration-150 focus-ring"
       />
       {value && (
