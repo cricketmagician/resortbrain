@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useOps } from "@/lib/ops-store";
 import { QueueListItem } from "@/components/ui/ops-kit/queue-list-item";
 import { EmptyErrorState } from "@/components/ui/ops-kit/empty-error-state";
@@ -17,6 +17,22 @@ import {
   Sparkles,
 } from "lucide-react";
 import { formatOpsTime } from "@/lib/utils";
+
+// Owns its own 1s tick in isolation so the clock doesn't force the whole
+// ticket board (and every card in it) to re-render every second.
+function LiveClock() {
+  const [currentTime, setCurrentTime] = useState<string>("");
+
+  useEffect(() => {
+    setCurrentTime(new Date().toLocaleTimeString());
+    const interval = setInterval(() => {
+      setCurrentTime(new Date().toLocaleTimeString());
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  return <span suppressHydrationWarning>{currentTime || "12:44:18 PM"}</span>;
+}
 
 export default function KitchenKDSPage() {
   const {
@@ -35,38 +51,39 @@ export default function KitchenKDSPage() {
 
   const [selectedStation, setSelectedStation] = useState<string>("All");
   const [statusFilter, setStatusFilter] = useState<string>("active");
-  const [currentTime, setCurrentTime] = useState<string>("");
-
-  // Live real-time clock ticker
-  useEffect(() => {
-    setCurrentTime(new Date().toLocaleTimeString());
-    const interval = setInterval(() => {
-      setCurrentTime(new Date().toLocaleTimeString());
-    }, 1000);
-    return () => clearInterval(interval);
-  }, []);
 
   // Filter tickets
-  const filteredTickets = kitchenTickets.filter((ticket) => {
-    if (statusFilter === "active") {
-      return (
-        ticket.status === "pending" ||
-        ticket.status === "accepted" ||
-        ticket.status === "preparing"
-      );
-    }
-    if (statusFilter === "ready") {
-      return ticket.status === "ready";
-    }
-    return true; // "all"
-  });
+  const filteredTickets = useMemo(
+    () =>
+      kitchenTickets.filter((ticket) => {
+        if (statusFilter === "active") {
+          return (
+            ticket.status === "pending" ||
+            ticket.status === "accepted" ||
+            ticket.status === "preparing"
+          );
+        }
+        if (statusFilter === "ready") {
+          return ticket.status === "ready";
+        }
+        return true; // "all"
+      }),
+    [kitchenTickets, statusFilter]
+  );
 
   // Calculate live stats
-  const pendingCount = kitchenTickets.filter((t) => t.status === "pending").length;
-  const preparingCount = kitchenTickets.filter(
-    (t) => t.status === "accepted" || t.status === "preparing"
-  ).length;
-  const readyCount = kitchenTickets.filter((t) => t.status === "ready").length;
+  const pendingCount = useMemo(
+    () => kitchenTickets.filter((t) => t.status === "pending").length,
+    [kitchenTickets]
+  );
+  const preparingCount = useMemo(
+    () => kitchenTickets.filter((t) => t.status === "accepted" || t.status === "preparing").length,
+    [kitchenTickets]
+  );
+  const readyCount = useMemo(
+    () => kitchenTickets.filter((t) => t.status === "ready").length,
+    [kitchenTickets]
+  );
 
   return (
     <div className="space-y-4">
@@ -147,7 +164,7 @@ export default function KitchenKDSPage() {
           {/* Time Clock */}
           <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800 font-mono text-xs text-slate-200">
             <Clock className="w-3.5 h-3.5 text-slate-400" />
-            <span suppressHydrationWarning>{currentTime || "12:44:18 PM"}</span>
+            <LiveClock />
           </div>
 
           {/* Add simulated test order */}

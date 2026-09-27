@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { useOps } from "@/lib/ops-store";
+import { useOps, useSimulatedLatency } from "@/lib/ops-store";
 import {
   Volume2,
   VolumeX,
@@ -41,8 +41,8 @@ export function DemoControlBar() {
     isBuzzerRinging,
     silenceBuzzer,
     triggerBuzzerDemo,
-    latencyMs,
   } = useOps();
+  const latencyMs = useSimulatedLatency();
 
   const [isExpanded, setIsExpanded] = useState(false);
   const pathname = usePathname();

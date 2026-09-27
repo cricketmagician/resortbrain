@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useOps } from "@/lib/ops-store";
+import { useOps, useSimulatedLatency } from "@/lib/ops-store";
 import {
   UtensilsCrossed,
   ConciergeBell,
@@ -33,7 +33,6 @@ export default function StaffLayout({
   const {
     currentHotel,
     currentStaff,
-    latencyMs,
     isSimulatedOffline,
     isSoundMuted,
     toggleSound,
@@ -43,6 +42,7 @@ export default function StaffLayout({
     isBuzzerRinging,
     silenceBuzzer,
   } = useOps();
+  const latencyMs = useSimulatedLatency();
 
   const [isPinModalOpen, setIsPinModalOpen] = useState(false);
   const isLightMode = theme === "light";

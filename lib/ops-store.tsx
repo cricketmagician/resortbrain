@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from "react";
 import {
   HotelTenant,
   StaffMember,
@@ -46,7 +46,6 @@ interface OpsContextType {
   // Realtime & Connectivity
   isSoundMuted: boolean;
   toggleSound: () => void;
-  latencyMs: number;
   isSimulatedOffline: boolean;
   toggleOffline: () => void;
   simulateRaceConditionConflict: boolean;
@@ -116,7 +115,6 @@ export function OpsProvider({ children }: { children: React.ReactNode }) {
   const [allHotels, setAllHotels] = useState<HotelTenant[]>(SEED_HOTELS);
   const [currentStaff, setCurrentStaff] = useState<StaffMember>(SEED_STAFF[0]);
   const [isSoundMuted, setIsSoundMuted] = useState(false);
-  const [latencyMs, setLatencyMs] = useState(24);
   const [isSimulatedOffline, setIsSimulatedOffline] = useState(false);
   const [simulateRaceConditionConflict, setSimulateRaceConditionConflict] = useState(false);
 
@@ -687,67 +685,105 @@ export function OpsProvider({ children }: { children: React.ReactNode }) {
     [currentStaff, showToast]
   );
 
-  // Ping jitter simulation
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setLatencyMs(Math.floor(20 + Math.random() * 12));
-    }, 4000);
-    return () => clearInterval(interval);
-  }, []);
-
-  return (
-    <OpsContext.Provider
-      value={{
-        currentHotel,
-        allHotels,
-        switchHotel,
-        currentStaff,
-        allStaff: SEED_STAFF,
-        switchStaffWithPin,
-        isSoundMuted,
-        toggleSound,
-        latencyMs,
-        isSimulatedOffline,
-        toggleOffline,
-        simulateRaceConditionConflict,
-        setSimulateRaceConditionConflict,
-        theme,
-        toggleTheme,
-        isBuzzerRinging,
-        silenceBuzzer,
-        triggerBuzzerDemo,
-        kitchenTickets,
-        rooms,
-        serviceRequests,
-        folios,
-        menuCatalog,
-        auditLogs,
-        deviceConfig,
-        slaAlerts,
-        acceptTicket,
-        rejectOrHoldTicket,
-        startPrepTicket,
-        readyTicket,
-        simulateIncomingOrder,
-        simulateIncomingServiceRequest,
-        updateRoomStatus,
-        acceptServiceRequest,
-        completeServiceRequest,
-        addFolioAdjustment,
-        updateMenuItem,
-        toggleMenuItemAvailability,
-        dismissSlaAlert,
-        reassignSlaAlert,
-        suspendTenant,
-        toasts,
-        dismissToast,
-        showToast,
-        hasTenantAccess,
-      }}
-    >
-      {children}
-    </OpsContext.Provider>
+  // Provider value is memoized so identity-based consumers (React.memo,
+  // useEffect deps) don't see a "change" on every render — only when a
+  // tracked field actually changes. Without this, every OpsProvider render
+  // (parent re-render, unrelated state elsewhere in the tree, etc.) forced
+  // all 16+ consumers across the staff/admin app to re-render.
+  const value = useMemo<OpsContextType>(
+    () => ({
+      currentHotel,
+      allHotels,
+      switchHotel,
+      currentStaff,
+      allStaff: SEED_STAFF,
+      switchStaffWithPin,
+      isSoundMuted,
+      toggleSound,
+      isSimulatedOffline,
+      toggleOffline,
+      simulateRaceConditionConflict,
+      setSimulateRaceConditionConflict,
+      theme,
+      toggleTheme,
+      isBuzzerRinging,
+      silenceBuzzer,
+      triggerBuzzerDemo,
+      kitchenTickets,
+      rooms,
+      serviceRequests,
+      folios,
+      menuCatalog,
+      auditLogs,
+      deviceConfig,
+      slaAlerts,
+      acceptTicket,
+      rejectOrHoldTicket,
+      startPrepTicket,
+      readyTicket,
+      simulateIncomingOrder,
+      simulateIncomingServiceRequest,
+      updateRoomStatus,
+      acceptServiceRequest,
+      completeServiceRequest,
+      addFolioAdjustment,
+      updateMenuItem,
+      toggleMenuItemAvailability,
+      dismissSlaAlert,
+      reassignSlaAlert,
+      suspendTenant,
+      toasts,
+      dismissToast,
+      showToast,
+      hasTenantAccess,
+    }),
+    [
+      currentHotel,
+      allHotels,
+      switchHotel,
+      currentStaff,
+      switchStaffWithPin,
+      isSoundMuted,
+      toggleSound,
+      isSimulatedOffline,
+      toggleOffline,
+      simulateRaceConditionConflict,
+      theme,
+      toggleTheme,
+      isBuzzerRinging,
+      silenceBuzzer,
+      triggerBuzzerDemo,
+      kitchenTickets,
+      rooms,
+      serviceRequests,
+      folios,
+      menuCatalog,
+      auditLogs,
+      deviceConfig,
+      slaAlerts,
+      acceptTicket,
+      rejectOrHoldTicket,
+      startPrepTicket,
+      readyTicket,
+      simulateIncomingOrder,
+      simulateIncomingServiceRequest,
+      updateRoomStatus,
+      acceptServiceRequest,
+      completeServiceRequest,
+      addFolioAdjustment,
+      updateMenuItem,
+      toggleMenuItemAvailability,
+      dismissSlaAlert,
+      reassignSlaAlert,
+      suspendTenant,
+      toasts,
+      dismissToast,
+      showToast,
+      hasTenantAccess,
+    ]
   );
+
+  return <OpsContext.Provider value={value}>{children}</OpsContext.Provider>;
 }
 
 export function useOps() {
@@ -756,4 +792,21 @@ export function useOps() {
     throw new Error("useOps must be used within an OpsProvider");
   }
   return context;
+}
+
+// Cosmetic "network ping" readout shown in the staff header / demo control
+// bar. Deliberately kept out of OpsContext: it changes every 4s, and living
+// in the shared store would force every OpsContext consumer (all staff/admin
+// pages) to re-render on that tick even though nothing operational changed.
+export function useSimulatedLatency(): number {
+  const [latencyMs, setLatencyMs] = useState(24);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setLatencyMs(Math.floor(20 + Math.random() * 12));
+    }, 4000);
+    return () => clearInterval(interval);
+  }, []);
+
+  return latencyMs;
 }

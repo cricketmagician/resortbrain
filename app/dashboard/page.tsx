@@ -236,6 +236,13 @@ export default function DashboardPage() {
     return orders.filter((o) => o.status === 'pending' || o.status === 'accepted' || o.status === 'preparing').length;
   }, [orders]);
 
+  const pendingOrders = useMemo(() => orders.filter((o) => o.status === 'pending'), [orders]);
+  const preparingOrders = useMemo(
+    () => orders.filter((o) => o.status === 'accepted' || o.status === 'preparing'),
+    [orders]
+  );
+  const readyOrders = useMemo(() => orders.filter((o) => o.status === 'ready'), [orders]);
+
   const occupiedRoomsCount = useMemo(() => {
     return roomsList.filter((r) => r.status === 'occupied' || r.activeStay !== null).length;
   }, [roomsList]);
@@ -1019,13 +1026,12 @@ export default function DashboardPage() {
                       <span className="font-bold text-xs text-amber-300 uppercase">1. New Incoming</span>
                     </div>
                     <span className="font-mono text-xs font-bold text-amber-300">
-                      {orders.filter((o) => o.status === 'pending').length}
+                      {pendingOrders.length}
                     </span>
                   </div>
 
                   <div className="space-y-3">
-                    {orders
-                      .filter((o) => o.status === 'pending')
+                    {pendingOrders
                       .map((order) => (
                         <div
                           key={order.id}
@@ -1060,7 +1066,7 @@ export default function DashboardPage() {
                           </button>
                         </div>
                       ))}
-                    {orders.filter((o) => o.status === 'pending').length === 0 && (
+                    {pendingOrders.length === 0 && (
                       <div className="p-8 text-center rounded-xl border border-dashed border-slate-800 text-xs text-slate-500">
                         No pending tickets
                       </div>
@@ -1076,13 +1082,12 @@ export default function DashboardPage() {
                       <span className="font-bold text-xs text-blue-300 uppercase">2. Cooking Line</span>
                     </div>
                     <span className="font-mono text-xs font-bold text-blue-300">
-                      {orders.filter((o) => o.status === 'accepted' || o.status === 'preparing').length}
+                      {preparingOrders.length}
                     </span>
                   </div>
 
                   <div className="space-y-3">
-                    {orders
-                      .filter((o) => o.status === 'accepted' || o.status === 'preparing')
+                    {preparingOrders
                       .map((order) => (
                         <div
                           key={order.id}
@@ -1112,7 +1117,7 @@ export default function DashboardPage() {
                           </button>
                         </div>
                       ))}
-                    {orders.filter((o) => o.status === 'accepted' || o.status === 'preparing').length === 0 && (
+                    {preparingOrders.length === 0 && (
                       <div className="p-8 text-center rounded-xl border border-dashed border-slate-800 text-xs text-slate-500">
                         No orders on cooking line
                       </div>
@@ -1128,13 +1133,12 @@ export default function DashboardPage() {
                       <span className="font-bold text-xs text-emerald-300 uppercase">3. Ready for Runner</span>
                     </div>
                     <span className="font-mono text-xs font-bold text-emerald-300">
-                      {orders.filter((o) => o.status === 'ready').length}
+                      {readyOrders.length}
                     </span>
                   </div>
 
                   <div className="space-y-3">
-                    {orders
-                      .filter((o) => o.status === 'ready')
+                    {readyOrders
                       .map((order) => (
                         <div
                           key={order.id}
@@ -1164,7 +1168,7 @@ export default function DashboardPage() {
                           </button>
                         </div>
                       ))}
-                    {orders.filter((o) => o.status === 'ready').length === 0 && (
+                    {readyOrders.length === 0 && (
                       <div className="p-8 text-center rounded-xl border border-dashed border-slate-800 text-xs text-slate-500">
                         No orders awaiting runner
                       </div>

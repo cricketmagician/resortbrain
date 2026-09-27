@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { useOps } from "@/lib/ops-store";
 import { SlaBadge } from "@/components/ui/ops-kit/sla-badge";
 import { RoomRecord, RoomCleanStatus } from "@/modules/ops/types";
@@ -34,17 +34,28 @@ export default function HousekeepingPage() {
   const [selectedFloor, setSelectedFloor] = useState<number>(2);
   const [filterCleanliness, setFilterCleanliness] = useState<string>("ALL");
 
-  const floorRooms = rooms.filter((r) => r.floor === selectedFloor);
-  const filteredRooms = floorRooms.filter((r) => {
-    if (filterCleanliness === "ALL") return true;
-    return r.cleanStatus === filterCleanliness;
-  });
+  const filteredRooms = useMemo(
+    () =>
+      rooms.filter(
+        (r) => r.floor === selectedFloor && (filterCleanliness === "ALL" || r.cleanStatus === filterCleanliness)
+      ),
+    [rooms, selectedFloor, filterCleanliness]
+  );
 
   // Aggregate counts
-  const cleanCount = rooms.filter((r) => r.cleanStatus === "CLEAN" || r.cleanStatus === "INSPECTED").length;
-  const inProgCount = rooms.filter((r) => r.cleanStatus === "CLEANING").length;
-  const dirtyCount = rooms.filter((r) => r.cleanStatus === "DIRTY").length;
-  const oooCount = rooms.filter((r) => r.cleanStatus === "OOO").length;
+  const { cleanCount, inProgCount, dirtyCount, oooCount } = useMemo(() => {
+    let cleanCount = 0;
+    let inProgCount = 0;
+    let dirtyCount = 0;
+    let oooCount = 0;
+    for (const r of rooms) {
+      if (r.cleanStatus === "CLEAN" || r.cleanStatus === "INSPECTED") cleanCount++;
+      else if (r.cleanStatus === "CLEANING") inProgCount++;
+      else if (r.cleanStatus === "DIRTY") dirtyCount++;
+      else if (r.cleanStatus === "OOO") oooCount++;
+    }
+    return { cleanCount, inProgCount, dirtyCount, oooCount };
+  }, [rooms]);
 
   return (
     <div className="space-y-6">
