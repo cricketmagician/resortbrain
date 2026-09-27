@@ -6,7 +6,7 @@ import { extractStayToken, verifyStayToken } from '@/server/auth';
 import { db } from '@/server/db';
 import { TransitionRequestInputSchema } from '@/modules/requests/schema';
 import { transitionRequestStatus } from '@/modules/requests/service';
-import { supabaseServer } from '@/server/supabase';
+import { supabaseServer, withSupabaseTimeout } from '@/server/supabase';
 import { isSameTenant } from '@/server/tenant';
 
 export async function GET(
@@ -21,11 +21,11 @@ export async function GET(
 
     if (!request) {
       try {
-        const { data: sbReq, error } = await supabaseServer
-          .from('service_requests')
-          .select('*, rooms(room_number)')
-          .eq('id', id)
-          .maybeSingle();
+        const sbResult = await withSupabaseTimeout(
+          supabaseServer.from('service_requests').select('*, rooms(room_number)').eq('id', id).maybeSingle()
+        );
+        const sbReq = sbResult?.data;
+        const error = sbResult?.error;
 
         if (!error && sbReq) {
           request = {
@@ -73,22 +73,26 @@ export async function PATCH(
 
     // 1. Try Supabase service_requests
     try {
-      const { data: sbReq, error: fetchErr } = await supabaseServer
-        .from('service_requests')
-        .select('*, rooms(room_number)')
-        .eq('id', id)
-        .maybeSingle();
+      const fetchResult = await withSupabaseTimeout(
+        supabaseServer.from('service_requests').select('*, rooms(room_number)').eq('id', id).maybeSingle()
+      );
+      const sbReq = fetchResult?.data;
+      const fetchErr = fetchResult?.error;
 
       if (!fetchErr && sbReq) {
-        const { data: updated, error: updateErr } = await supabaseServer
-          .from('service_requests')
-          .update({
-            status: nextStatus,
-            completed_at: nextStatus === 'completed' ? new Date().toISOString() : null,
-          })
-          .eq('id', id)
-          .select('*, rooms(room_number)')
-          .single();
+        const updateResult = await withSupabaseTimeout(
+          supabaseServer
+            .from('service_requests')
+            .update({
+              status: nextStatus,
+              completed_at: nextStatus === 'completed' ? new Date().toISOString() : null,
+            })
+            .eq('id', id)
+            .select('*, rooms(room_number)')
+            .single()
+        );
+        const updated = updateResult?.data;
+        const updateErr = updateResult?.error;
 
         if (!updateErr && updated) {
           updatedRequest = {

@@ -82,7 +82,11 @@ export interface ServiceRequest {
   hotelId: string;
   roomNumber: string;
   title: string;
-  category: "Pillows" | "Crib" | "Towels" | "Cleaning" | "Maintenance" | "Luggage" | "cleaning" | "maintenance" | "amenity";
+  // Local demo tickets use specific item names ("Pillows", "Towels"...); real requests
+  // (see lib/housekeeping-request-sync.ts) carry a department category ("housekeeping",
+  // "front_desk"...) instead — both are just displayed as plain text, so this stays a
+  // plain string rather than an enum neither source fully satisfies.
+  category: string;
   placedAt: string;
   dueAt: string;
   status: "created" | "acknowledged" | "in_progress" | "completed";

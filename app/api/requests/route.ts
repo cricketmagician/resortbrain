@@ -6,7 +6,7 @@ import { CreateRequestInputSchema } from '@/modules/requests/schema';
 import { createServiceRequest } from '@/modules/requests/service';
 import { getGuestRequests, getDepartmentRequests } from '@/modules/requests/queries';
 import { extractStayToken, verifyStayToken } from '@/server/auth';
-import { supabaseServer } from '@/server/supabase';
+import { supabaseServer, withSupabaseTimeout } from '@/server/supabase';
 import { resolveTenant } from '@/server/tenant';
 import { sendWebPushNotification } from '@/server/push';
 
@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
           ? request.room_id
           : 'a0000101-0000-0000-0000-000000000101';
 
-      await supabaseServer.from('service_requests').insert({
+      await withSupabaseTimeout(supabaseServer.from('service_requests').insert({
         hotel_id: tenant.uuid,
         stay_id: targetStayId,
         room_id: targetRoomId,
@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
         status: request.status,
         priority: request.priority,
         sla_minutes: request.sla_minutes,
-      });
+      }));
     } catch (err) {
       console.warn('Background Supabase sync error for service request:', err);
     }
@@ -88,8 +88,12 @@ export async function GET(req: NextRequest) {
     }
 
     if (hotelId) {
-      const localRequests = await getDepartmentRequests(hotelId, category);
+      // Resolve the tenant (slug/uuid/id -> canonical local id) before querying local
+      // storage: db.getRequests() does an exact match on hotel_id, and hotelId here is
+      // often a slug ("grand-azure") rather than the canonical id ("hotel-001") the
+      // stored requests actually carry — passing it unresolved silently returned nothing.
       const tenant = resolveTenant(hotelId);
+      const localRequests = await getDepartmentRequests(tenant.id, category);
 
       try {
         let query = supabaseServer
@@ -102,7 +106,9 @@ export async function GET(req: NextRequest) {
           query = query.eq('category', category);
         }
 
-        const { data: sbRequests, error } = await query;
+        const queryResult = await withSupabaseTimeout(query);
+        const sbRequests = queryResult?.data;
+        const error = queryResult?.error;
         if (!error && sbRequests && sbRequests.length > 0) {
           const formattedSb = sbRequests.map((r: any) => ({
             ...r,

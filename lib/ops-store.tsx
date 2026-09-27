@@ -27,6 +27,7 @@ import {
 } from "@/db/seed/ops/seed-data";
 import { kitchenAudioEngine } from "@/lib/audio-engine";
 import { OPS_HOTEL_TO_BACKEND_SLUG, mapOrderToKitchenTicket, type BackendOrder } from "@/lib/kitchen-order-sync";
+import { mapRequestToOpsRequest, type BackendServiceRequest } from "@/lib/housekeeping-request-sync";
 
 interface ToastNotification {
   id: string;
@@ -153,6 +154,8 @@ export function OpsProvider({ children }: { children: React.ReactNode }) {
   // "haven't polled yet", so the very first poll doesn't blast the buzzer for
   // every order already in the queue.
   const knownOrderIdsRef = useRef<Set<string> | null>(null);
+  // Same tracking, for the requests poll below.
+  const knownRequestIdsRef = useRef<Set<string> | null>(null);
 
   useEffect(() => {
     const backendSlug = OPS_HOTEL_TO_BACKEND_SLUG[currentHotel.id];
@@ -228,6 +231,73 @@ export function OpsProvider({ children }: { children: React.ReactNode }) {
       });
     },
     [currentHotel.id, currentStaff.role]
+  );
+
+  // Same bridge as the orders poll above, for housekeeping/front-desk service requests —
+  // see lib/housekeeping-request-sync.ts. The "Simulate Request" button is intentionally
+  // left local-only: unlike /api/orders, /api/requests has no staff-side bypass and always
+  // requires a real guest stay token, so there's no real request to create here without
+  // building new session-minting surface, which is out of scope for wiring up existing
+  // endpoints. A simulated request on the mapped hotel is therefore transient — it shows
+  // until the next 5s poll replaces serviceRequests with the real queue.
+  useEffect(() => {
+    const backendSlug = OPS_HOTEL_TO_BACKEND_SLUG[currentHotel.id];
+    if (!backendSlug) return;
+
+    let cancelled = false;
+    knownRequestIdsRef.current = null;
+    setServiceRequests([]);
+
+    async function pollRequests() {
+      try {
+        const res = await fetch(`/api/requests?hotelId=${backendSlug}`, { cache: "no-store" });
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        if (cancelled) return;
+        const requests: BackendServiceRequest[] = data.requests || [];
+
+        const knownIds = knownRequestIdsRef.current;
+        const newPendingRequests = knownIds ? requests.filter((r) => r.status === "created" && !knownIds.has(r.id)) : [];
+        knownRequestIdsRef.current = new Set(requests.map((r) => r.id));
+        for (const r of newPendingRequests) kitchenAudioEngine.startBuzzer(r.id);
+        for (const r of requests) {
+          if (r.status !== "created") kitchenAudioEngine.stopBuzzer(r.id);
+        }
+
+        setServiceRequests((prev) => {
+          const assignedToMap = new Map(prev.filter((r) => r.assignedTo).map((r) => [r.id, r.assignedTo]));
+          const next = requests.map((r) => mapRequestToOpsRequest(r, assignedToMap.get(r.id)));
+          const changed =
+            next.length !== prev.length ||
+            next.some((r, i) => r.id !== prev[i]?.id || r.status !== prev[i]?.status || r.assignedTo !== prev[i]?.assignedTo);
+          return changed ? next : prev;
+        });
+      } catch (err) {
+        console.error("[housekeeping] Failed to poll real requests:", err);
+      }
+    }
+
+    pollRequests();
+    const interval = setInterval(pollRequests, 5000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [currentHotel.id]);
+
+  const syncRequestStatusToBackend = useCallback(
+    (requestId: string, nextStatus: string) => {
+      const backendSlug = OPS_HOTEL_TO_BACKEND_SLUG[currentHotel.id];
+      if (!backendSlug) return;
+      fetch(`/api/requests/${requestId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", "x-hotel-id": backendSlug },
+        body: JSON.stringify({ nextStatus, hotelId: backendSlug }),
+      }).catch((err) => {
+        console.error(`[housekeeping] Failed to sync request ${requestId} -> ${nextStatus}:`, err);
+      });
+    },
+    [currentHotel.id]
   );
 
   const toggleTheme = useCallback(() => {
@@ -641,13 +711,14 @@ export function OpsProvider({ children }: { children: React.ReactNode }) {
             : req
         )
       );
+      syncRequestStatusToBackend(requestId, "acknowledged");
       showToast({
         type: "success",
         title: "Dispatch Accepted",
         message: `Assigned to ${currentStaff.name}. Buzzer silenced.`,
       });
     },
-    [currentStaff.name, showToast]
+    [currentStaff.name, showToast, syncRequestStatusToBackend]
   );
 
   const completeServiceRequest = useCallback(
@@ -655,13 +726,14 @@ export function OpsProvider({ children }: { children: React.ReactNode }) {
       setServiceRequests((prev) =>
         prev.map((req) => (req.id === requestId ? { ...req, status: "completed" } : req))
       );
+      syncRequestStatusToBackend(requestId, "completed");
       showToast({
         type: "success",
         title: "Service Request Completed",
         message: "Request marked fulfilled and closed.",
       });
     },
-    [showToast]
+    [showToast, syncRequestStatusToBackend]
   );
 
   const addFolioAdjustment = useCallback(
