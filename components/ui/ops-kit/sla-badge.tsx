@@ -17,22 +17,27 @@ export function SlaBadge({
   warningThresholdMinutes = 5,
   className,
 }: SlaBadgeProps) {
-  const [diffMinutes, setDiffMinutes] = useState<number>(() => {
-    const dueTime = new Date(dueAt).getTime();
-    return Math.round((dueTime - Date.now()) / 60000);
-  });
+  // Starts null (not computed from Date.now()) so the server-rendered markup
+  // and the client's first render agree; a wall-clock-based initializer here
+  // caused a hydration mismatch (SSR and hydration run at different real
+  // instants, so the minute count could differ), which forced React to
+  // discard and rebuild the entire ticket tree on every kitchen page load.
+  const [diffMinutes, setDiffMinutes] = useState<number | null>(null);
 
   // Keep countdown live without page refreshes
   useEffect(() => {
     if (completedAt) return;
-    const interval = setInterval(() => {
+    const update = () => {
       const dueTime = new Date(dueAt).getTime();
       setDiffMinutes(Math.round((dueTime - Date.now()) / 60000));
-    }, 10000);
+    };
+    update();
+    const interval = setInterval(update, 10000);
     return () => clearInterval(interval);
   }, [dueAt, completedAt]);
 
-  // Case 1: Completed
+  // Case 1: Completed (checked first — doesn't depend on diffMinutes, and
+  // the effect above never computes it for a completed ticket)
   if (completedAt) {
     return (
       <span
@@ -43,6 +48,22 @@ export function SlaBadge({
       >
         <CheckCircle className="w-3 h-3 text-slate-400" />
         Completed
+      </span>
+    );
+  }
+
+  // Case 0: Not yet computed (first client paint, pre-effect) — neutral,
+  // non-alarming placeholder that matches the server-rendered markup.
+  if (diffMinutes === null) {
+    return (
+      <span
+        className={cn(
+          "inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-300 border border-emerald-500/20",
+          className
+        )}
+      >
+        <Clock className="w-3 h-3 text-emerald-400" />
+        <span>SLA: —</span>
       </span>
     );
   }

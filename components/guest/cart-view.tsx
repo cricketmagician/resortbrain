@@ -61,13 +61,22 @@ export function CartView({ hotel, session, menu }: CartViewProps) {
     [cart.lines, menuById]
   );
 
-  const [generalNote, setGeneralNoteState] = useState(() => {
+  // Starts empty, not read from sessionStorage: sessionStorage doesn't exist
+  // during SSR, so a lazy initializer reading it made the server always
+  // render '' while the client could render a returning guest's saved note
+  // — a hydration mismatch. Reading it in an effect keeps the first
+  // server/client render in agreement; the saved note (if any) fills in
+  // right after mount.
+  const [generalNote, setGeneralNoteState] = useState('');
+
+  useEffect(() => {
     try {
-      return sessionStorage.getItem(noteStorageKey(session.stayId)) ?? '';
+      const saved = sessionStorage.getItem(noteStorageKey(session.stayId));
+      if (saved) setGeneralNoteState(saved);
     } catch {
-      return '';
+      // ignore — note just won't be restored this time
     }
-  });
+  }, [session.stayId]);
 
   function setGeneralNote(value: string) {
     setGeneralNoteState(value);

@@ -17,6 +17,8 @@ if (process.env.NODE_ENV === 'production') {
   notFound();
 }
 
+const FIXED_SHOWCASE_NOW = new Date('2025-01-01T12:00:00Z').getTime();
+
 const DEMO_ITEMS: MenuItemCardData[] = [
   {
     id: 'demo-1',
@@ -234,7 +236,10 @@ function SkeletonShowcase() {
 }
 
 function StatusTimelineShowcase() {
-  const [now] = React.useState(() => Date.now());
+  // Fixed reference point, not Date.now(): this only demos relative offsets
+  // ("6 min ago" etc.), so it doesn't need real time — and Date.now() here
+  // would differ between SSR and hydration, causing a hydration mismatch.
+  const now = FIXED_SHOWCASE_NOW;
   const timeline = React.useMemo(
     () =>
       buildOrderTimeline({
