@@ -16,6 +16,11 @@ function Dashes() {
 // 80mm thermal receipt (docs/m2/04 §12). print-only: invisible on screen, shown only inside a
 // forced-light @page 80mm print pass that ReceiptView switches on.
 export function PrintableReceipt({ hotel, session, invoice, orders }: PrintableReceiptProps) {
+  // flatMap loses which order each line came from, so the same dish ordered more than
+  // once across separate orders (a common case, not an edge case) produced duplicate
+  // menuItemId keys below. This list is a static, print-only render of an already-paid
+  // invoice's lines — it never reorders or mutates after mount — so the array index is
+  // a safe, unique key here.
   const lines = orders.flatMap((order) => order.lines);
 
   return (
@@ -29,8 +34,8 @@ export function PrintableReceipt({ hotel, session, invoice, orders }: PrintableR
         {GUEST_COPY.receipt.room} {session.roomNumber} · {session.guestName}
       </p>
       <Dashes />
-      {lines.map((line) => (
-        <div key={line.menuItemId} className="flex justify-between gap-2" style={{ breakInside: 'avoid' }}>
+      {lines.map((line, i) => (
+        <div key={i} className="flex justify-between gap-2" style={{ breakInside: 'avoid' }}>
           <span>
             {line.quantity} × {line.name}
           </span>

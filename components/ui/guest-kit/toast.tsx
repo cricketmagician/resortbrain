@@ -108,10 +108,13 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   return (
     <ToastContext.Provider value={{ show, dismiss }}>
       {children}
-      {/* Anchored well above the CartBar (components/guest/cart-bar.tsx), which floats at
-          bottom-[...+16px]: a toast used to render almost exactly on top of it, and since
-          adding an item both shows a toast and reveals the cart bar, tapping "View cart" right
-          after adding something silently hit the (invisible, higher z-index) toast instead. */}
+      {/* Toasts float over whatever page content happens to end up underneath them
+          (e.g. bill-view's "View Receipt" CTA, or components/guest/cart-bar.tsx) —
+          on a short page there's no scroll position that avoids this. Rather than
+          chase every element that might land there, only the toast's own
+          interactive bits (dismiss, action) are pointer-events-auto; a tap on its
+          background/text passes through to whatever is actually underneath instead
+          of being silently swallowed by the toast's hit area. */}
       <div className="pointer-events-none fixed inset-x-0 bottom-[calc(64px+env(safe-area-inset-bottom)+84px)] z-50 mx-auto flex w-full max-w-[480px] flex-col gap-2 px-4">
         {toasts.map((t) => {
           const tone = t.tone ?? 'info';
@@ -126,7 +129,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
               onMouseLeave={() => resume(t.id, duration)}
               onFocus={() => pause(t.id)}
               onBlur={() => resume(t.id, duration)}
-              className="animate-rise pointer-events-auto flex overflow-hidden rounded-lg border border-line bg-surface-2 shadow-rb-2"
+              className="animate-rise pointer-events-none flex overflow-hidden rounded-lg border border-line bg-surface-2 shadow-rb-2"
             >
               <span className={cn('w-1 shrink-0', TONE_BAR[tone])} aria-hidden />
               <div className="flex flex-1 items-start gap-2.5 py-3 pl-3 pr-2">
@@ -141,7 +144,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                         t.action?.onClick();
                         dismiss(t.id);
                       }}
-                      className="mt-1.5 rounded text-sm font-semibold text-accent focus-ring"
+                      className="pointer-events-auto mt-1.5 rounded text-sm font-semibold text-accent focus-ring"
                     >
                       {t.action.label}
                     </button>
@@ -151,7 +154,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                   type="button"
                   onClick={() => dismiss(t.id)}
                   aria-label="Dismiss"
-                  className="grid size-8 shrink-0 place-items-center rounded-full text-ink-subtle hover:text-ink focus-ring"
+                  className="pointer-events-auto grid size-8 shrink-0 place-items-center rounded-full text-ink-subtle hover:text-ink focus-ring"
                 >
                   <X aria-hidden className="size-4" strokeWidth={1.75} />
                 </button>
