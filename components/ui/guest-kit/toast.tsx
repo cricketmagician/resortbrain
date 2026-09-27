@@ -108,7 +108,11 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   return (
     <ToastContext.Provider value={{ show, dismiss }}>
       {children}
-      <div className="pointer-events-none fixed inset-x-0 bottom-[calc(64px+env(safe-area-inset-bottom)+12px)] z-50 mx-auto flex w-full max-w-[480px] flex-col gap-2 px-4">
+      {/* Anchored well above the CartBar (components/guest/cart-bar.tsx), which floats at
+          bottom-[...+16px]: a toast used to render almost exactly on top of it, and since
+          adding an item both shows a toast and reveals the cart bar, tapping "View cart" right
+          after adding something silently hit the (invisible, higher z-index) toast instead. */}
+      <div className="pointer-events-none fixed inset-x-0 bottom-[calc(64px+env(safe-area-inset-bottom)+84px)] z-50 mx-auto flex w-full max-w-[480px] flex-col gap-2 px-4">
         {toasts.map((t) => {
           const tone = t.tone ?? 'info';
           const Icon = TONE_ICON[tone];
