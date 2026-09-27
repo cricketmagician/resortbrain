@@ -117,7 +117,9 @@ export async function GET(req: NextRequest) {
           const merged = [...localOnly, ...formattedSb];
           return NextResponse.json({ requests: merged, source: 'merged' });
         }
-      } catch {}
+      } catch (err) {
+        console.error(`[requests] Supabase read failed for hotel ${tenant.id}, falling back to local store:`, err);
+      }
 
       return NextResponse.json({ requests: localRequests, source: 'local' });
     }

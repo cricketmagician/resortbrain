@@ -33,7 +33,9 @@ export async function GET(
             room_number: (sbOrder.rooms as any)?.room_number || 'Room 304',
           };
         }
-      } catch {}
+      } catch (err) {
+        console.error(`[orders/${id}] Supabase lookup failed:`, err);
+      }
     }
 
     if (!order) {

@@ -52,7 +52,9 @@ export async function POST(req: NextRequest) {
             });
           }
         }
-      } catch {}
+      } catch (err) {
+        console.error('[stays/verify] Supabase PIN lookup failed, falling back to local store:', err);
+      }
 
       const pinResult = db.verifyStayPin({
         hotelId,

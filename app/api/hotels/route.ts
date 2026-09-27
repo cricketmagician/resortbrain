@@ -45,7 +45,9 @@ export async function GET() {
 
       return NextResponse.json({ hotels, source: 'supabase' });
     }
-  } catch {}
+  } catch (err) {
+    console.error('[hotels] Supabase read failed, falling back to local store:', err);
+  }
 
   const hotels = db.hotels.map((h) => {
     const activeStay = db.stays.find((s) => s.hotel_id === h.id && s.status === 'active');

@@ -32,7 +32,9 @@ export async function POST(req: NextRequest) {
         .update({ status: 'available' })
         .or(`hotel_id.eq.${tenant.uuid},hotel_id.eq.${tenant.id}`)
         .eq('id', targetId);
-    } catch {}
+    } catch (err) {
+      console.error(`[stays/checkout] Supabase sync failed for ${targetId}:`, err);
+    }
 
     return NextResponse.json(result);
   } catch (err: unknown) {

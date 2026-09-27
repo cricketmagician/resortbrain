@@ -45,7 +45,9 @@ export async function POST(req: NextRequest) {
           total_paise: simOrder.total_paise,
           special_instructions: simOrder.special_instructions,
         });
-      } catch {}
+      } catch (err) {
+        console.error(`[orders] Supabase sync failed for simulated order ${simOrder.order_number}:`, err);
+      }
 
       return NextResponse.json({ success: true, order: simOrder }, { status: 201 });
     }
@@ -81,7 +83,9 @@ export async function POST(req: NextRequest) {
         special_instructions: order.special_instructions,
         idempotency_key: order.idempotency_key,
       });
-    } catch {}
+    } catch (err) {
+      console.error(`[orders] Supabase sync failed for order ${order.order_number}:`, err);
+    }
 
     return NextResponse.json({ success: true, order }, { status: 201 });
   } catch (err: unknown) {
@@ -138,7 +142,9 @@ export async function GET(req: NextRequest) {
 
           return NextResponse.json({ orders: enriched, source: 'supabase' });
         }
-      } catch {}
+      } catch (err) {
+        console.error(`[orders] Supabase read failed for hotel ${tenant.id}, falling back to local queue:`, err);
+      }
 
       const orders = await getKitchenQueue(tenant.id);
       return NextResponse.json({ orders, source: 'local' });

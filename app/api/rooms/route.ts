@@ -59,7 +59,9 @@ export async function GET(req: NextRequest) {
 
       return NextResponse.json({ success: true, rooms, source: 'supabase' });
     }
-  } catch {}
+  } catch (err) {
+    console.error('[rooms] Supabase read failed, falling back to local store:', err);
+  }
 
   try {
     const rooms = db.getRoomsWithStays(tenant.id);
