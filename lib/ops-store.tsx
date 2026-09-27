@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   HotelTenant,
   StaffMember,
@@ -26,6 +26,7 @@ import {
   INITIAL_SLA_ALERTS,
 } from "@/db/seed/ops/seed-data";
 import { kitchenAudioEngine } from "@/lib/audio-engine";
+import { OPS_HOTEL_TO_BACKEND_SLUG, mapOrderToKitchenTicket, type BackendOrder } from "@/lib/kitchen-order-sync";
 
 interface ToastNotification {
   id: string;
@@ -140,6 +141,94 @@ export function OpsProvider({ children }: { children: React.ReactNode }) {
     document.documentElement.classList.remove("dark", "light");
     document.documentElement.classList.add(initialTheme);
   }, []);
+
+  // Bridge the Kitchen KDS to real guest orders for hotels with a real backend
+  // counterpart (see lib/kitchen-order-sync.ts) — previously kitchenTickets was
+  // purely local/seeded, so a guest's real order never reached the kitchen.
+  // Other seeded hotels (platform/MRR demo only) are left on local simulated
+  // data since no real backend tenant exists for them.
+  // Tracks order ids already seen by the poll below, so a newly-arrived real
+  // guest order gets the same chime + buzzer alert "Simulate Ticket" gives —
+  // without this, real orders would appear on the KDS silently. null means
+  // "haven't polled yet", so the very first poll doesn't blast the buzzer for
+  // every order already in the queue.
+  const knownOrderIdsRef = useRef<Set<string> | null>(null);
+
+  useEffect(() => {
+    const backendSlug = OPS_HOTEL_TO_BACKEND_SLUG[currentHotel.id];
+    if (!backendSlug) return;
+
+    let cancelled = false;
+    knownOrderIdsRef.current = null;
+    // Clear the seeded demo tickets immediately rather than leaving them on
+    // screen (and clickable) until the first real poll resolves — briefly
+    // showing fake tickets for a hotel that's now backed by real orders is
+    // more confusing than a brief empty state.
+    setKitchenTickets([]);
+
+    async function pollOrders() {
+      try {
+        const res = await fetch(`/api/orders?hotelId=${backendSlug}`, { cache: "no-store" });
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        if (cancelled) return;
+        const orders: BackendOrder[] = data.orders || [];
+
+        const knownIds = knownOrderIdsRef.current;
+        const newPendingOrders = knownIds ? orders.filter((o) => o.status === "pending" && !knownIds.has(o.id)) : [];
+        knownOrderIdsRef.current = new Set(orders.map((o) => o.id));
+        for (const order of newPendingOrders) {
+          kitchenAudioEngine.playOrderChime();
+          kitchenAudioEngine.startBuzzer(order.id);
+        }
+        // Covers the order being accepted from a different tab/device: this
+        // session's acceptTicket() isn't what stopped it, so nothing else
+        // would silence the buzzer it started.
+        for (const order of orders) {
+          if (order.status !== "pending") kitchenAudioEngine.stopBuzzer(order.id);
+        }
+
+        setKitchenTickets((prev) => {
+          const acceptedByMap = new Map(prev.filter((t) => t.acceptedBy).map((t) => [t.id, t.acceptedBy]));
+          const next = orders.map((o) => mapOrderToKitchenTicket(o, acceptedByMap.get(o.id)));
+          // Skip the state update (and the resulting re-render cascade) when this
+          // 5s poll didn't actually change anything, which is the common case.
+          const changed =
+            next.length !== prev.length ||
+            next.some((t, i) => t.id !== prev[i]?.id || t.status !== prev[i]?.status || t.acceptedBy !== prev[i]?.acceptedBy);
+          return changed ? next : prev;
+        });
+      } catch (err) {
+        console.error("[kitchen] Failed to poll real orders:", err);
+      }
+    }
+
+    pollOrders();
+    const interval = setInterval(pollOrders, 5000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [currentHotel.id]);
+
+  // Best-effort sync of a kitchen action to the real order it's backed by. A no-op
+  // for hotels with no real backend tenant (see OPS_HOTEL_TO_BACKEND_SLUG); logged
+  // but non-blocking on failure, matching the rest of the app's background-sync
+  // pattern — the optimistic local update already gave the operator feedback.
+  const syncTicketStatusToBackend = useCallback(
+    (ticketId: string, nextStatus: string) => {
+      const backendSlug = OPS_HOTEL_TO_BACKEND_SLUG[currentHotel.id];
+      if (!backendSlug) return;
+      fetch(`/api/orders/${ticketId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", "x-hotel-id": backendSlug },
+        body: JSON.stringify({ nextStatus, hotelId: backendSlug, actorRole: currentStaff.role }),
+      }).catch((err) => {
+        console.error(`[kitchen] Failed to sync order ${ticketId} -> ${nextStatus}:`, err);
+      });
+    },
+    [currentHotel.id, currentStaff.role]
+  );
 
   const toggleTheme = useCallback(() => {
     setTheme((prev) => {
@@ -300,6 +389,7 @@ export function OpsProvider({ children }: { children: React.ReactNode }) {
         },
       };
       setAuditLogs((prev) => [newAudit, ...prev]);
+      syncTicketStatusToBackend(ticketId, "accepted");
 
       showToast({
         type: "success",
@@ -308,7 +398,7 @@ export function OpsProvider({ children }: { children: React.ReactNode }) {
       });
       return true;
     },
-    [kitchenTickets, currentStaff, simulateRaceConditionConflict, currentHotel.id, showToast]
+    [kitchenTickets, currentStaff, simulateRaceConditionConflict, currentHotel.id, showToast, syncTicketStatusToBackend]
   );
 
   const rejectOrHoldTicket = useCallback(
@@ -347,6 +437,7 @@ export function OpsProvider({ children }: { children: React.ReactNode }) {
         },
       };
       setAuditLogs((prev) => [newAudit, ...prev]);
+      syncTicketStatusToBackend(ticketId, "cancelled");
 
       showToast({
         type: "warning",
@@ -356,7 +447,7 @@ export function OpsProvider({ children }: { children: React.ReactNode }) {
 
       return true;
     },
-    [kitchenTickets, currentStaff, currentHotel.id, showToast]
+    [kitchenTickets, currentStaff, currentHotel.id, showToast, syncTicketStatusToBackend]
   );
 
   const startPrepTicket = useCallback(
@@ -364,6 +455,7 @@ export function OpsProvider({ children }: { children: React.ReactNode }) {
       setKitchenTickets((prev) =>
         prev.map((t) => (t.id === ticketId ? { ...t, status: "preparing" } : t))
       );
+      syncTicketStatusToBackend(ticketId, "preparing");
       showToast({
         type: "info",
         title: "Preparation Commenced",
@@ -371,7 +463,7 @@ export function OpsProvider({ children }: { children: React.ReactNode }) {
       });
       return true;
     },
-    [showToast]
+    [showToast, syncTicketStatusToBackend]
   );
 
   const readyTicket = useCallback(
@@ -379,6 +471,7 @@ export function OpsProvider({ children }: { children: React.ReactNode }) {
       setKitchenTickets((prev) =>
         prev.map((t) => (t.id === ticketId ? { ...t, status: "ready" } : t))
       );
+      syncTicketStatusToBackend(ticketId, "ready");
       kitchenAudioEngine.playOrderChime();
       showToast({
         type: "success",
@@ -387,11 +480,45 @@ export function OpsProvider({ children }: { children: React.ReactNode }) {
       });
       return true;
     },
-    [showToast]
+    [showToast, syncTicketStatusToBackend]
   );
 
   // Simulate incoming real-time order via Supabase Realtime channel
-  const simulateIncomingOrder = useCallback(() => {
+  const simulateIncomingOrder = useCallback(async () => {
+    const backendSlug = OPS_HOTEL_TO_BACKEND_SLUG[currentHotel.id];
+
+    // Hotels with a real backend tenant: create a real order via the same
+    // endpoint guests place orders through, so the simulated ticket is a real,
+    // guest-visible order (and survives the next 5s poll) instead of a
+    // local-only ticket that would vanish the moment the poll replaces
+    // kitchenTickets with the backend's actual queue.
+    if (backendSlug) {
+      try {
+        const res = await fetch("/api/orders", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ simulate: true, hotelId: backendSlug }),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.order) {
+          throw new Error(data.error || "Simulate order request failed");
+        }
+        const ticket = mapOrderToKitchenTicket(data.order as BackendOrder);
+        setKitchenTickets((prev) => [ticket, ...prev.filter((t) => t.id !== ticket.id)]);
+        kitchenAudioEngine.playOrderChime();
+        kitchenAudioEngine.startBuzzer(ticket.id);
+        showToast({
+          type: "warning",
+          title: "Realtime: New Kitchen Ticket",
+          message: `${ticket.ticketNumber} received for Room ${ticket.roomNumber}. Sharp buzzer active until accepted!`,
+        });
+      } catch (err) {
+        console.error("[kitchen] Failed to simulate a real order:", err);
+        showToast({ type: "error", title: "Simulate Ticket Failed", message: "Could not create a test order." });
+      }
+      return;
+    }
+
     const newNumber = `#0${Math.floor(423 + Math.random() * 80)}`;
     const randomRooms = ["204", "101", "308", "415", "502"];
     const randomRoom = randomRooms[Math.floor(Math.random() * randomRooms.length)];

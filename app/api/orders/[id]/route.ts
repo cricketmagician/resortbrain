@@ -6,7 +6,7 @@ import { extractStayToken, verifyStayToken } from '@/server/auth';
 import { db } from '@/server/db';
 import { TransitionOrderInputSchema } from '@/modules/orders/schema';
 import { transitionOrderStatus } from '@/modules/orders/service';
-import { supabaseServer } from '@/server/supabase';
+import { supabaseServer, withSupabaseTimeout } from '@/server/supabase';
 import { isSameTenant } from '@/server/tenant';
 
 export async function GET(
@@ -21,11 +21,11 @@ export async function GET(
 
     if (!order) {
       try {
-        const { data: sbOrder, error } = await supabaseServer
-          .from('orders')
-          .select('*, rooms(room_number)')
-          .eq('id', id)
-          .maybeSingle();
+        const sbResult = await withSupabaseTimeout(
+          supabaseServer.from('orders').select('*, rooms(room_number)').eq('id', id).maybeSingle()
+        );
+        const sbOrder = sbResult?.data;
+        const error = sbResult?.error;
 
         if (!error && sbOrder) {
           order = {
@@ -78,22 +78,26 @@ export async function PATCH(
 
     // 1. Check Supabase orders table
     try {
-      const { data: sbOrder, error: fetchErr } = await supabaseServer
-        .from('orders')
-        .select('*, rooms(room_number)')
-        .eq('id', id)
-        .maybeSingle();
+      const fetchResult = await withSupabaseTimeout(
+        supabaseServer.from('orders').select('*, rooms(room_number)').eq('id', id).maybeSingle()
+      );
+      const sbOrder = fetchResult?.data;
+      const fetchErr = fetchResult?.error;
 
       if (!fetchErr && sbOrder) {
-        const { data: updatedSb, error: updateErr } = await supabaseServer
-          .from('orders')
-          .update({
-            status: nextStatus,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', id)
-          .select('*, rooms(room_number)')
-          .single();
+        const updateResult = await withSupabaseTimeout(
+          supabaseServer
+            .from('orders')
+            .update({
+              status: nextStatus,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', id)
+            .select('*, rooms(room_number)')
+            .single()
+        );
+        const updatedSb = updateResult?.data;
+        const updateErr = updateResult?.error;
 
         if (!updateErr && updatedSb) {
           updatedOrder = {

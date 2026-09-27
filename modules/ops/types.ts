@@ -49,7 +49,7 @@ export interface KitchenTicket {
   ticketNumber: string;
   roomNumber: string;
   stayId: string;
-  guestName: string;
+  guestName?: string;
   placedAt: string; // ISO UTC
   dueAt: string;    // ISO UTC
   status: TicketStatus;

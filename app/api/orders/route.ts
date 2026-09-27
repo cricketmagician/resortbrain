@@ -7,7 +7,7 @@ import { placeOrder } from '@/modules/orders/service';
 import { getGuestOrders, getKitchenQueue } from '@/modules/orders/queries';
 import { checkRateLimit } from '@/server/rate-limit';
 import { extractStayToken, verifyStayToken } from '@/server/auth';
-import { supabaseServer } from '@/server/supabase';
+import { supabaseServer, withSupabaseTimeout } from '@/server/supabase';
 import { db } from '@/server/db';
 import { resolveTenant, isSameTenant } from '@/server/tenant';
 
@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
 
       // Best effort background sync to Supabase
       try {
-        await supabaseServer.from('orders').insert({
+        await withSupabaseTimeout(supabaseServer.from('orders').insert({
           hotel_id: tenant.uuid,
           stay_id: 'c0000101-0000-0000-0000-000000000101',
           room_id: 'a0000101-0000-0000-0000-000000000101',
@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
           service_charge_paise: simOrder.service_charge_paise,
           total_paise: simOrder.total_paise,
           special_instructions: simOrder.special_instructions,
-        });
+        }));
       } catch (err) {
         console.error(`[orders] Supabase sync failed for simulated order ${simOrder.order_number}:`, err);
       }
@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
     // Sync to Supabase in background
     try {
       const tenant = resolveTenant(order.hotel_id);
-      await supabaseServer.from('orders').insert({
+      await withSupabaseTimeout(supabaseServer.from('orders').insert({
         hotel_id: tenant.uuid,
         stay_id: order.stay_id,
         room_id: order.room_id || 'a0000101-0000-0000-0000-000000000101',
@@ -82,7 +82,7 @@ export async function POST(req: NextRequest) {
         total_paise: order.total_paise,
         special_instructions: order.special_instructions,
         idempotency_key: order.idempotency_key,
-      });
+      }));
     } catch (err) {
       console.error(`[orders] Supabase sync failed for order ${order.order_number}:`, err);
     }
@@ -113,17 +113,24 @@ export async function GET(req: NextRequest) {
     if (hotelId) {
       const tenant = resolveTenant(hotelId);
       try {
-        const { data: sbOrders, error } = await supabaseServer
-          .from('orders')
-          .select('id, hotel_id, stay_id, room_id, order_number, status, items, subtotal_paise, tax_paise, service_charge_paise, total_paise, special_instructions, created_at')
-          .or(`hotel_id.eq.${tenant.uuid},hotel_id.eq.${tenant.id}`)
-          .order('created_at', { ascending: false });
+        const sbOrdersResult = await withSupabaseTimeout(
+          supabaseServer
+            .from('orders')
+            .select('id, hotel_id, stay_id, room_id, order_number, status, items, subtotal_paise, tax_paise, service_charge_paise, total_paise, special_instructions, created_at')
+            .or(`hotel_id.eq.${tenant.uuid},hotel_id.eq.${tenant.id}`)
+            .order('created_at', { ascending: false })
+        );
+        const sbOrders = sbOrdersResult?.data;
+        const error = sbOrdersResult?.error;
 
         if (!error && sbOrders && sbOrders.length > 0) {
-          const { data: sbRooms } = await supabaseServer
-            .from('rooms')
-            .select('id, room_number')
-            .or(`hotel_id.eq.${tenant.uuid},hotel_id.eq.${tenant.id}`);
+          const sbRoomsResult = await withSupabaseTimeout(
+            supabaseServer
+              .from('rooms')
+              .select('id, room_number')
+              .or(`hotel_id.eq.${tenant.uuid},hotel_id.eq.${tenant.id}`)
+          );
+          const sbRooms = sbRoomsResult?.data;
 
           const roomMap = new Map((sbRooms || []).map((r: any) => [r.id, r.room_number]));
 
