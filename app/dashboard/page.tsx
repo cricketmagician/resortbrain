@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
+import { useOps } from '@/lib/ops-store';
 import {
   LayoutDashboard,
   Utensils,
@@ -97,7 +98,15 @@ interface HotelTenant {
 
 export default function DashboardPage() {
   // Theme & Sound
-  const [isDark, setIsDark] = useState(true);
+  // Was its own disconnected useState(true): always opened dark regardless of
+  // the shared preference (set on every other staff/admin page and persisted
+  // to localStorage via OpsProvider), and toggling it here didn't persist or
+  // affect any other page. That mismatch between this page's own forced-dark
+  // wrapper and the shared <html> theme class produced illegible, broken
+  // contrast whenever the shared theme was "light". Now shares the same
+  // theme/toggleTheme as the rest of the app.
+  const { theme, toggleTheme } = useOps();
+  const isDark = theme === 'dark';
   const [isSoundMuted, setIsSoundMuted] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
@@ -578,7 +587,7 @@ export default function DashboardPage() {
 
               {/* Theme Toggle */}
               <button
-                onClick={() => setIsDark(!isDark)}
+                onClick={toggleTheme}
                 className="p-1.5 rounded-lg border border-slate-700/80 hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"
                 title="Toggle Theme"
               >

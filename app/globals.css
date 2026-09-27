@@ -388,6 +388,23 @@ html.light .bg-teal-950\/60 {
   color: #115e59 !important;
 }
 
+/* /dashboard's bespoke panel shades: same "elevated dark surface" role as
+   bg-slate-900/950 above, just custom hex instead of the named palette, so
+   they were never covered by those overrides — text on them (already
+   flipped to dark by the text-slate-* overrides) was unreadable against a
+   background stuck in dark mode. */
+html.light .bg-\[\#0e1424\],
+html.light .bg-\[\#0a0f1c\],
+html.light .bg-\[\#0b101c\],
+html.light .bg-\[\#0b101c\]\/80,
+html.light .bg-\[\#080d18\] {
+  background-color: #ffffff !important;
+}
+
+html.light .bg-\[\#080c14\]\/90 {
+  background-color: #f8fafc !important;
+}
+
 /* Scrollbars */
 ::-webkit-scrollbar {
   width: 6px;
