@@ -4,6 +4,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import {
   HotelTenant,
   StaffMember,
+  Department,
   KitchenTicket,
   RoomRecord,
   ServiceRequest,
@@ -42,6 +43,10 @@ interface OpsContextType {
   currentStaff: StaffMember;
   allStaff: StaffMember[];
   switchStaffWithPin: (staffId: string, pin: string) => boolean;
+  addStaffMember: (staff: Omit<StaffMember, "id">) => void;
+  updateStaffMember: (staff: StaffMember) => void;
+  updateStaffStatus: (staffId: string, status: "on_duty" | "on_break" | "off_duty" | "in_task") => void;
+  dispatchStaffTask: (staffId: string, taskTitle: string, department: Department) => void;
 
   // Realtime & Connectivity
   isSoundMuted: boolean;
@@ -114,6 +119,7 @@ const OpsContext = createContext<OpsContextType | undefined>(undefined);
 export function OpsProvider({ children }: { children: React.ReactNode }) {
   const [currentHotel, setCurrentHotel] = useState<HotelTenant>(SEED_HOTELS[0]);
   const [allHotels, setAllHotels] = useState<HotelTenant[]>(SEED_HOTELS);
+  const [staffList, setStaffList] = useState<StaffMember[]>(SEED_STAFF);
   const [currentStaff, setCurrentStaff] = useState<StaffMember>(SEED_STAFF[0]);
   const [isSoundMuted, setIsSoundMuted] = useState(false);
   const [latencyMs, setLatencyMs] = useState(24);
@@ -223,7 +229,7 @@ export function OpsProvider({ children }: { children: React.ReactNode }) {
 
   const switchStaffWithPin = useCallback(
     (staffId: string, pin: string): boolean => {
-      const target = SEED_STAFF.find((s) => s.id === staffId);
+      const target = staffList.find((s) => s.id === staffId);
       if (!target) return false;
       if (target.pin !== pin) {
         showToast({
@@ -245,7 +251,138 @@ export function OpsProvider({ children }: { children: React.ReactNode }) {
       });
       return true;
     },
-    [showToast]
+    [staffList, showToast]
+  );
+
+  const addStaffMember = useCallback(
+    (newStaff: Omit<StaffMember, "id">) => {
+      const staffRecord: StaffMember = {
+        ...newStaff,
+        id: `usr_${Date.now()}`,
+        hotelId: currentHotel.id,
+        status: newStaff.status || "on_duty",
+        rating: newStaff.rating || 5.0,
+        activeTasks: newStaff.activeTasks || 0,
+        joinedDate: new Date().toISOString().slice(0, 10),
+      };
+      setStaffList((prev) => [staffRecord, ...prev]);
+
+      const newAudit: AuditLogItem = {
+        id: `aud_${Date.now()}`,
+        hotelId: currentHotel.id,
+        timestamp: new Date().toISOString(),
+        actorId: currentStaff.id,
+        actorName: `${currentStaff.name} (${currentStaff.roleTitle})`,
+        eventType: "staff.created",
+        entityTarget: `${staffRecord.name} (${staffRecord.roleTitle})`,
+        ipAddress: "192.241.14.82",
+        traceId: `tr_${Math.random().toString(36).substr(2, 8)}`,
+        payload: {
+          staffId: staffRecord.id,
+          name: staffRecord.name,
+          department: staffRecord.department,
+          role: staffRecord.role,
+          station: staffRecord.station,
+        },
+      };
+      setAuditLogs((prev) => [newAudit, ...prev]);
+
+      showToast({
+        type: "success",
+        title: "Staff Member Added",
+        message: `${staffRecord.name} onboarded to ${staffRecord.department} station: ${staffRecord.station}.`,
+      });
+    },
+    [currentHotel.id, currentStaff, showToast]
+  );
+
+  const updateStaffMember = useCallback(
+    (updated: StaffMember) => {
+      setStaffList((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+      if (currentStaff.id === updated.id) {
+        setCurrentStaff(updated);
+      }
+
+      const newAudit: AuditLogItem = {
+        id: `aud_${Date.now()}`,
+        hotelId: currentHotel.id,
+        timestamp: new Date().toISOString(),
+        actorId: currentStaff.id,
+        actorName: `${currentStaff.name} (${currentStaff.roleTitle})`,
+        eventType: "staff.updated",
+        entityTarget: `${updated.name} (${updated.roleTitle})`,
+        ipAddress: "192.241.14.82",
+        traceId: `tr_${Math.random().toString(36).substr(2, 8)}`,
+        payload: {
+          staffId: updated.id,
+          name: updated.name,
+          station: updated.station,
+          shift: updated.shift,
+        },
+      };
+      setAuditLogs((prev) => [newAudit, ...prev]);
+
+      showToast({
+        type: "success",
+        title: "Staff Profile Updated",
+        message: `${updated.name}'s station and shift assignments updated.`,
+      });
+    },
+    [currentHotel.id, currentStaff, showToast]
+  );
+
+  const updateStaffStatus = useCallback(
+    (staffId: string, status: "on_duty" | "on_break" | "off_duty" | "in_task") => {
+      setStaffList((prev) =>
+        prev.map((s) => (s.id === staffId ? { ...s, status } : s))
+      );
+      const target = staffList.find((s) => s.id === staffId);
+      showToast({
+        type: "info",
+        title: "Duty Status Changed",
+        message: `${target?.name || "Staff"} is now ${status.replace("_", " ").toUpperCase()}.`,
+      });
+    },
+    [staffList, showToast]
+  );
+
+  const dispatchStaffTask = useCallback(
+    (staffId: string, taskTitle: string, department: Department) => {
+      setStaffList((prev) =>
+        prev.map((s) =>
+          s.id === staffId
+            ? { ...s, activeTasks: (s.activeTasks || 0) + 1, status: "in_task" }
+            : s
+        )
+      );
+      const target = staffList.find((s) => s.id === staffId);
+
+      const newAudit: AuditLogItem = {
+        id: `aud_${Date.now()}`,
+        hotelId: currentHotel.id,
+        timestamp: new Date().toISOString(),
+        actorId: currentStaff.id,
+        actorName: `${currentStaff.name} (${currentStaff.roleTitle})`,
+        eventType: "staff.dispatched",
+        entityTarget: `${target?.name || "Staff"} -> ${taskTitle}`,
+        ipAddress: "192.241.14.82",
+        traceId: `tr_${Math.random().toString(36).substr(2, 8)}`,
+        payload: {
+          staffId,
+          staffName: target?.name,
+          taskTitle,
+          department,
+        },
+      };
+      setAuditLogs((prev) => [newAudit, ...prev]);
+
+      showToast({
+        type: "success",
+        title: "Task Dispatched",
+        message: `Assigned "${taskTitle}" to ${target?.name || "Staff"} (${department}). Status set to IN TASK.`,
+      });
+    },
+    [currentHotel.id, currentStaff, staffList, showToast]
   );
 
   // Optimistic Kitchen Ticket Mutations with Concurrency Conflict Simulation
@@ -456,11 +593,12 @@ export function OpsProvider({ children }: { children: React.ReactNode }) {
   const simulateIncomingServiceRequest = useCallback(() => {
     const randomRooms = ["102", "204", "305", "412", "501"];
     const randomRoom = randomRooms[Math.floor(Math.random() * randomRooms.length)];
-    const services = [
-      { title: "Extra Feather Pillows & Fresh Linens", category: "amenity" as const },
-      { title: "Urgent Turndown Service & Towels", category: "cleaning" as const },
-      { title: "Mini-bar Restock & Ice Bucket", category: "maintenance" as const },
-      { title: "Child Cot & Baby Amenity Kit", category: "amenity" as const },
+    const services: Array<{ title: string; category: ServiceRequest["category"] }> = [
+      { title: "Extra Feather Pillows & Fresh Linens", category: "Pillows" },
+      { title: "Urgent Turndown Service & Towels", category: "Cleaning" },
+      { title: "Mini-bar Restock & Ice Bucket", category: "Maintenance" },
+      { title: "Child Cot & Baby Amenity Kit", category: "Crib" },
+      { title: "Luggage Valet Assistance", category: "Luggage" },
     ];
     const chosen = services[Math.floor(Math.random() * services.length)];
     const newReq: ServiceRequest = {
@@ -472,6 +610,7 @@ export function OpsProvider({ children }: { children: React.ReactNode }) {
       placedAt: new Date().toISOString(),
       dueAt: new Date(Date.now() + 20 * 60 * 1000).toISOString(),
       status: "created",
+      urgency: "urgent",
     };
 
     setServiceRequests((prev) => [newReq, ...prev]);
@@ -701,8 +840,12 @@ export function OpsProvider({ children }: { children: React.ReactNode }) {
         allHotels,
         switchHotel,
         currentStaff,
-        allStaff: SEED_STAFF,
+        allStaff: staffList,
         switchStaffWithPin,
+        addStaffMember,
+        updateStaffMember,
+        updateStaffStatus,
+        dispatchStaffTask,
         isSoundMuted,
         toggleSound,
         latencyMs,

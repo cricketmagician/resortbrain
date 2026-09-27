@@ -269,6 +269,15 @@ export function DemoControlBar() {
               [4] Device
             </Link>
             <Link
+              href="/staff"
+              className={cn(
+                "px-2 py-1 rounded hover:bg-slate-800 hover:text-white transition-colors",
+                pathname === "/staff" ? "bg-emerald-950 text-emerald-300 font-bold" : ""
+              )}
+            >
+              [5] Staff
+            </Link>
+            <Link
               href="/manager"
               className={cn(
                 "px-2 py-1 rounded hover:bg-slate-800 hover:text-white transition-colors",

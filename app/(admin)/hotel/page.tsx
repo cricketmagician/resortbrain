@@ -1,12 +1,13 @@
 "use client";
 
 import React, { useState } from "react";
+import Link from "next/link";
 import { useOps } from "@/lib/ops-store";
 import { TabNavigation } from "@/components/ui/ops-kit/tab-navigation";
 import { PremiumDialog } from "@/components/ui/ops-kit/premium-dialog";
 import { MenuItem } from "@/modules/ops/types";
 import { MenuItemSchema } from "@/modules/ops/schema";
-import { formatPaiseToINR } from "@/lib/utils";
+import { formatPaiseToINR, formatNumber } from "@/lib/utils";
 import {
   Settings,
   UtensilsCrossed,
@@ -241,7 +242,7 @@ export default function HotelAdminPage() {
                         {formatPaiseToINR(item.pricePaise)}
                       </div>
                       <div className="text-[10px] text-slate-500">
-                        {item.pricePaise.toLocaleString()} paise (GST {item.taxRatePct}%)
+                        {formatNumber(item.pricePaise)} paise (GST {item.taxRatePct}%)
                       </div>
                     </td>
                     <td className="px-4 py-3.5 text-slate-400 font-mono text-[11px]">
@@ -344,18 +345,27 @@ export default function HotelAdminPage() {
                 Staff accounts are invite-only and strictly scoped via Row Level Security (RLS).
               </p>
             </div>
-            <button
-              onClick={() =>
-                showToast({
-                  type: "success",
-                  title: "Invite Token Generated",
-                  message: "Single-use cryptographic staff invite link copied to clipboard.",
-                })
-              }
-              className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 text-white"
-            >
-              + Generate Invite Token
-            </button>
+            <div className="flex items-center gap-2">
+              <Link
+                href="/staff"
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow transition-colors flex items-center gap-1.5"
+              >
+                <Users className="w-3.5 h-3.5" />
+                <span>Open Staff Management System</span>
+              </Link>
+              <button
+                onClick={() =>
+                  showToast({
+                    type: "success",
+                    title: "Invite Token Generated",
+                    message: "Single-use cryptographic staff invite link copied to clipboard.",
+                  })
+                }
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white transition-colors"
+              >
+                + Generate Invite Token
+              </button>
+            </div>
           </div>
 
           <div className="divide-y divide-slate-800">

@@ -10,6 +10,7 @@ import {
   Globe2,
   FileCode2,
   FileBarChart2,
+  Users,
   ArrowLeft,
   Building2,
   ShieldCheck,
@@ -48,6 +49,11 @@ export default function AdminLayout({
       label: "[8] Immutable Audit Log",
       href: "/audit",
       icon: FileCode2,
+    },
+    {
+      label: "Staff Roster & Ops",
+      href: "/staff",
+      icon: Users,
     },
     {
       label: "Reports & Exports",
@@ -156,7 +162,7 @@ export default function AdminLayout({
               })}
             </nav>
 
-            <div className="hidden lg:flex items-center gap-2 text-xs font-mono text-slate-400">
+            <div className="hidden lg:flex items-center gap-2 text-xs font-mono text-slate-400 flex-shrink-0 whitespace-nowrap pl-4">
               <span className="text-slate-500">Security:</span>
               <span className="text-indigo-400">Zero-Trust Active</span>
             </div>

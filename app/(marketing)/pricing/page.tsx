@@ -11,9 +11,14 @@ import {
   Building,
   Headphones,
   Sliders,
+  Sun,
+  Moon,
 } from "lucide-react";
+import { useOps } from "@/lib/ops-store";
+import { formatNumber } from "@/lib/utils";
 
 export default function PricingPage() {
+  const { theme, toggleTheme } = useOps();
   const [isAnnual, setIsAnnual] = useState(true);
   const [customRooms, setCustomRooms] = useState(85);
 
@@ -38,6 +43,9 @@ export default function PricingPage() {
             <Link href="/kitchen" className="hover:text-emerald-400 transition-colors">
               Kitchen Display (KDS)
             </Link>
+            <Link href="/staff" className="hover:text-emerald-400 transition-colors">
+              Staff Management
+            </Link>
             <Link href="/desk" className="hover:text-emerald-400 transition-colors">
               Front Desk & Billing
             </Link>
@@ -50,6 +58,19 @@ export default function PricingPage() {
           </nav>
 
           <div className="flex items-center gap-3">
+            {/* Theme Toggle */}
+            <button
+              onClick={toggleTheme}
+              className="p-2 rounded-lg bg-slate-900 border border-slate-800 text-slate-300 hover:text-white transition-colors cursor-pointer"
+              title="Toggle Light / Dark mode"
+            >
+              {theme === "light" ? (
+                <Sun className="w-4 h-4 text-amber-400" />
+              ) : (
+                <Moon className="w-4 h-4 text-indigo-400" />
+              )}
+            </button>
+
             <Link
               href="/kitchen"
               className="px-4 py-2 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-950/60 transition-all active:scale-95"
@@ -322,7 +343,7 @@ export default function PricingPage() {
           <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-800 text-left font-mono">
             <div>
               <div className="text-[11px] text-slate-500 font-sans">Est. Monthly Labor Savings</div>
-              <div className="text-xl font-bold text-white">${estimatedLaborSavingsMonthly.toLocaleString()}</div>
+              <div className="text-xl font-bold text-white">${formatNumber(estimatedLaborSavingsMonthly)}</div>
             </div>
             <div>
               <div className="text-[11px] text-slate-500 font-sans">Kitchen Ticket Turnaround</div>

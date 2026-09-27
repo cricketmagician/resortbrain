@@ -13,6 +13,7 @@ import {
   Volume2,
   VolumeX,
   User,
+  Users,
   ShieldAlert,
   ArrowRight,
   Sun,
@@ -67,6 +68,11 @@ export default function StaffLayout({
       label: "[4] Devices & Push",
       href: "/device",
       icon: Tablet,
+    },
+    {
+      label: "[5] Staff Management",
+      href: "/staff",
+      icon: Users,
     },
   ];
 

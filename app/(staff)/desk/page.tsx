@@ -5,7 +5,7 @@ import { useOps } from "@/lib/ops-store";
 import { DataTable } from "@/components/ui/ops-kit/data-table";
 import { ColumnDef } from "@tanstack/react-table";
 import { StayFolio } from "@/modules/ops/types";
-import { formatPaiseToINR } from "@/lib/utils";
+import { formatPaiseToINR, formatNumber } from "@/lib/utils";
 import { DeskAdjustmentModal } from "@/components/staff/desk-adjustment-modal";
 import {
   ConciergeBell,
@@ -70,7 +70,7 @@ export default function FrontDeskPage() {
             {formatPaiseToINR(row.original.totalDuePaise)}
           </div>
           <div className="text-[10px] text-slate-500">
-            {row.original.totalDuePaise.toLocaleString()} paise
+            {formatNumber(row.original.totalDuePaise)} paise
           </div>
         </div>
       ),
@@ -266,7 +266,7 @@ export default function FrontDeskPage() {
                 {formatPaiseToINR(selectedFolio.totalDuePaise)}
               </div>
               <div className="text-[10px] text-slate-500">
-                ({selectedFolio.totalDuePaise.toLocaleString()} paise)
+                ({formatNumber(selectedFolio.totalDuePaise)} paise)
               </div>
             </div>
           </div>

@@ -316,7 +316,7 @@ export default function HousekeepingPage() {
                 <div className="flex items-center gap-3 text-xs text-slate-400 font-mono">
                   <span>Category: {req.category}</span>
                   <span>•</span>
-                  <span>Placed: {formatOpsTime(req.placedAt)}</span>
+                  <span suppressHydrationWarning>Placed: {formatOpsTime(req.placedAt)}</span>
                   {req.assignedTo && (
                     <>
                       <span>•</span>

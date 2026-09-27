@@ -5,9 +5,21 @@ export type UserRole =
   | "housekeeping"
   | "maintenance"
   | "manager"
-  | "super_admin";
+  | "super_admin"
+  | "supervisor"
+  | "concierge"
+  | "technician"
+  | "server"
+  | "security";
 
-export type Department = "kitchen" | "desk" | "housekeeping" | "admin";
+export type Department =
+  | "kitchen"
+  | "desk"
+  | "housekeeping"
+  | "maintenance"
+  | "f&b"
+  | "security"
+  | "admin";
 
 export interface HotelTenant {
   id: string;
@@ -31,6 +43,15 @@ export interface StaffMember {
   station: string;
   shift: string;
   pin: string;
+  phone?: string;
+  email?: string;
+  status?: "on_duty" | "on_break" | "off_duty" | "in_task";
+  activeTasks?: number;
+  avatar?: string;
+  rating?: number;
+  joinedDate?: string;
+  certifications?: string[];
+  emergencyContact?: string;
 }
 
 export interface OrderItemModifier {
@@ -158,12 +179,17 @@ export interface AuditLogItem {
     | "order.created"
     | "order.accepted"
     | "order.prepared"
+    | "order.held"
+    | "order.cancelled"
     | "folio.manual_discount"
     | "folio.manual_charge"
     | "folio.settled"
     | "audit.support_access"
     | "notification.escalated"
-    | "tenant.suspended";
+    | "tenant.suspended"
+    | "staff.created"
+    | "staff.updated"
+    | "staff.dispatched";
   entityTarget: string;
   ipAddress: string;
   traceId: string;

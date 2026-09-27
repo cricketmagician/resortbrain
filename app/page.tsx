@@ -23,10 +23,13 @@ import {
   Layers,
   CheckCircle2,
   Award,
+  Users,
+  Sun,
+  Moon,
 } from "lucide-react";
 
 export default function OperationsPortalHomePage() {
-  const { currentHotel, kitchenTickets, slaAlerts, folios, rooms } = useOps();
+  const { currentHotel, kitchenTickets, slaAlerts, folios, rooms, allStaff, theme, toggleTheme } = useOps();
 
   const screens = [
     {
@@ -67,6 +70,15 @@ export default function OperationsPortalHomePage() {
     },
     {
       num: "5",
+      title: "Staff Management System & Roster",
+      route: "/staff",
+      icon: Users,
+      color: "emerald",
+      badge: `${allStaff.length} Members`,
+      desc: "Multi-department staff roster (Kitchen, Housekeeping, Desk, Maintenance, F&B, Security), station assignments, and shift scheduling.",
+    },
+    {
+      num: "6",
       title: "Manager Dashboard & SLA Radar",
       route: "/manager",
       icon: LayoutDashboard,
@@ -75,7 +87,7 @@ export default function OperationsPortalHomePage() {
       desc: "Zero-dependency pure SVG hourly volume curve, department velocity benchmarks, P0 radar.",
     },
     {
-      num: "6",
+      num: "7",
       title: "Hotel Admin & Configuration",
       route: "/hotel",
       icon: Settings,
@@ -84,7 +96,7 @@ export default function OperationsPortalHomePage() {
       desc: "Menu catalog manager, station SLA assignments, floor topology, staff invite token generator.",
     },
     {
-      num: "7",
+      num: "8",
       title: "Platform Admin (SaaS Control)",
       route: "/platform",
       icon: Globe2,
@@ -93,7 +105,7 @@ export default function OperationsPortalHomePage() {
       desc: "Global tenant metrics, MRR meters, 15-minute break-glass support session, typed suspension.",
     },
     {
-      num: "8",
+      num: "9",
       title: "Immutable Audit Log Viewer",
       route: "/audit",
       icon: FileCode2,
@@ -105,6 +117,54 @@ export default function OperationsPortalHomePage() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 selection:bg-emerald-500/30 selection:text-emerald-200">
+      {/* Global Top Nav */}
+      <header className="border-b border-slate-800 bg-slate-950/90 backdrop-blur-md sticky top-0 z-30">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
+          <Link href="/" className="flex items-center gap-2.5 group">
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-400 flex items-center justify-center shadow-lg shadow-emerald-950/60 ring-1 ring-emerald-400/40">
+              <Sparkles className="w-4 h-4 text-white" />
+            </div>
+            <span className="font-bold text-sm tracking-tight text-white group-hover:text-emerald-300 transition-colors">
+              Grand Azure Ops
+            </span>
+          </Link>
+
+          <div className="flex items-center gap-2 sm:gap-3">
+            <Link
+              href="/staff"
+              className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/25 transition-colors"
+            >
+              Staff Management
+            </Link>
+            <Link
+              href="/kitchen"
+              className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-800 transition-colors"
+            >
+              Staff Workspaces
+            </Link>
+            <Link
+              href="/manager"
+              className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/25 transition-colors"
+            >
+              Admin HQ
+            </Link>
+
+            {/* Theme Toggle */}
+            <button
+              onClick={toggleTheme}
+              className="p-2 rounded-lg bg-slate-900 border border-slate-800 text-slate-300 hover:text-white transition-colors cursor-pointer"
+              title="Toggle Light / Dark mode"
+            >
+              {theme === "light" ? (
+                <Sun className="w-4 h-4 text-amber-400" />
+              ) : (
+                <Moon className="w-4 h-4 text-indigo-400" />
+              )}
+            </button>
+          </div>
+        </div>
+      </header>
+
       {/* 1. Hero Header */}
       <div className="relative overflow-hidden border-b border-slate-800 bg-gradient-to-b from-slate-900 via-slate-950 to-slate-950 py-16 px-4 sm:px-6">
         <div className="absolute top-0 right-1/4 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
@@ -184,15 +244,15 @@ export default function OperationsPortalHomePage() {
         </div>
       </div>
 
-      {/* 2. The 8 Operational Screens Master Directory */}
+      {/* 2. The 9 Operational Screens Master Directory */}
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-12 space-y-6">
         <div className="flex items-center justify-between pb-2 border-b border-slate-800">
           <div>
             <h2 className="text-xl font-bold text-white tracking-tight">
-              The 8 Operational Surfaces (Screen 1 to 8)
+              The 9 Operational Surfaces (Screen 1 to 9)
             </h2>
             <p className="text-xs text-slate-400 mt-0.5">
-              100% owned and built by Member 3 according to Master Blueprint v3.0
+              Comprehensive operations suite including multi-department Staff Management, Kitchen, Front Desk, Housekeeping, Manager Radar, and Admin Control Plane.
             </p>
           </div>
           <span className="text-xs font-mono text-emerald-400">

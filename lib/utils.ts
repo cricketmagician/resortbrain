@@ -21,6 +21,13 @@ export function formatPaiseToINR(paise: number): string {
 }
 
 /**
+ * Format number with deterministic en-US locale to avoid hydration mismatches between SSR and browser
+ */
+export function formatNumber(num: number): string {
+  return new Intl.NumberFormat("en-US").format(num);
+}
+
+/**
  * Formats ISO UTC timestamp into localized operational display
  */
 export function formatOpsTime(isoString: string | Date): string {
